@@ -1,0 +1,24 @@
+Failed to start server: error: database "simrs_hub " does not exist
+    at C:\Users\User\Downloads\AONE TRUST SIMRS\VPS\node_modules\pg-pool\index.js:45:11
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async query (file:///C:/Users/User/Downloads/AONE%20TRUST%20SIMRS/VPS/dist/server-hub.mjs:204:15)
+    at async migrate (file:///C:/Users/User/Downloads/AONE%20TRUST%20SIMRS/VPS/dist/server-hub.mjs:339:3)
+    at async start (file:///C:/Users/User/Downloads/AONE%20TRUST%20SIMRS/VPS/dist/server-hub.mjs:942:3) {
+  length: 96,
+  severity: 'FATAL',
+  code: '3D000',
+  detail: undefined,
+  hint: undefined,
+  position: undefined,
+  internalPosition: undefined,
+  internalQuery: undefined,
+  where: undefined,
+  schema: undefined,
+  table: undefined,
+  column: undefined,
+  dataType: undefined,
+  constraint: undefined,
+  file: 'postinit.c',
+  line: '1016',
+  routine: 'InitPostgres'
+}
