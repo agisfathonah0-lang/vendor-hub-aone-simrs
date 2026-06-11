@@ -1,15 +1,32 @@
 import pg from "pg";
 import { readFileSync, existsSync } from "fs";
 
-const pool = new pg.Pool({
-  host: process.env.PGHOST || "localhost",
-  port: parseInt(process.env.PGPORT || "5432"),
-  user: process.env.PGUSER || "postgres",
-  password: process.env.PGPASSWORD || "postgres",
-  database: process.env.PGDATABASE || "simrs_hub",
-  max: 20,
-  idleTimeoutMillis: 30000,
-});
+function getPoolConfig(): pg.PoolConfig {
+  const dbUrl = process.env.DATABASE_URL;
+  if (dbUrl) {
+    const ssl = !dbUrl.includes('sslmode=disable');
+    return {
+      connectionString: dbUrl,
+      ssl: ssl ? { rejectUnauthorized: false } : false,
+      max: 20,
+      idleTimeoutMillis: 30000,
+    };
+  }
+  return {
+    host: process.env.PGHOST || "localhost",
+    port: parseInt(process.env.PGPORT || "5432"),
+    user: process.env.PGUSER || "postgres",
+    password: process.env.PGPASSWORD || "postgres",
+    database: process.env.PGDATABASE || "simrs_hub",
+    ssl: process.env.PGSSLMODE === "require" || process.env.PGSSLMODE === "verify-full"
+      ? { rejectUnauthorized: false }
+      : false,
+    max: 20,
+    idleTimeoutMillis: 30000,
+  };
+}
+
+const pool = new pg.Pool(getPoolConfig());
 
 pool.on("error", (err) => {
   console.error("[DB_POOL] Unexpected error:", err);
