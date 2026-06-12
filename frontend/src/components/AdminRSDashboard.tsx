@@ -31,11 +31,15 @@ function useImageUpload() {
         if (xhr.status === 200) {
           const d = JSON.parse(xhr.responseText);
           if (d.url) { cb(d.url); setUploadOk(p => ({ ...p, [field]: true })); setTimeout(() => setUploadOk(p => ({ ...p, [field]: false })), 2000); }
-        } else { alert("Upload gagal"); }
+        } else {
+          let msg = "Upload gagal";
+          try { const d = JSON.parse(xhr.responseText); if (d.error) msg = d.error; } catch {}
+          alert(msg);
+        }
         setUploading(p => ({ ...p, [field]: false }));
         setProgress(p => ({ ...p, [field]: 0 }));
       };
-      xhr.onerror = () => { alert("Upload gagal"); setUploading(p => ({ ...p, [field]: false })); setProgress(p => ({ ...p, [field]: 0 })); };
+      xhr.onerror = () => { alert("Upload gagal (network error)"); setUploading(p => ({ ...p, [field]: false })); setProgress(p => ({ ...p, [field]: 0 })); };
       xhr.open("POST", "/api/vendor/upload");
       xhr.setRequestHeader("Authorization", "Bearer " + localStorage.getItem("vps_token"));
       xhr.send(fd);

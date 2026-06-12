@@ -5,9 +5,10 @@ import { Router } from "express";
 import { query } from "../db.js";
 const verifyLimiter = new Map<string, { count: number; resetAt: number }>();
 import crypto from "crypto";
-import { readFileSync, writeFileSync, existsSync, mkdirSync } from "fs";
+import { readFileSync, writeFileSync, existsSync, mkdirSync, renameSync } from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
+import multer from "multer";
 import { getOnlineRs } from "../tunnel/manager.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -773,9 +774,6 @@ router.patch("/my/institution/config", requireAdmin, async (req: any, res) => {
 });
 
 // Upload image (admin only)
-import multer from "multer";
-import path from "path";
-import crypto from "crypto";
 const upload = multer({
   dest: path.join(process.cwd(), "uploads"),
   limits: { fileSize: 5 * 1024 * 1024 },
@@ -786,11 +784,15 @@ const upload = multer({
 });
 router.post("/upload", requireAdmin, upload.single("file"), (req: any, res) => {
   if (!req.file) return res.status(400).json({ error: "No file uploaded" });
-  const ext = path.extname(req.file.originalname) || ".jpg";
-  const newName = crypto.randomUUID() + ext;
-  const fs = require("fs");
-  fs.renameSync(req.file.path, path.join(req.file.destination, newName));
-  res.json({ url: `/uploads/${newName}` });
+  try {
+    const ext = path.extname(req.file.originalname) || ".jpg";
+    const newName = crypto.randomUUID() + ext;
+    renameSync(req.file.path, path.join(req.file.destination, newName));
+    res.json({ url: `/uploads/${newName}` });
+  } catch (err: any) {
+    console.error("Upload error:", err);
+    res.status(500).json({ error: err.message || "Upload failed" });
+  }
 });
 
 // Landing page config — public GET, super admin PUT
