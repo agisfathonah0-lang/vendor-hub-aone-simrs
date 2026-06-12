@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from "react";
 import {
   LayoutDashboard, Building2, Users, CreditCard, Puzzle, Activity, Megaphone,
   FileSpreadsheet, Database, LifeBuoy, Plus, Search, X, ChevronRight, ShieldCheck,
-  Server, DollarSign, Clock, CheckCircle2,   Edit3, Lock, Unlock, UserPlus, Zap,
+  Server, DollarSign, Clock, CheckCircle, CheckCircle2,   Edit3, Lock, Unlock, UserPlus, Zap,
   RefreshCw, MapPin, Globe, Filter, AlertTriangle, BarChart3, MessageSquare,
   Wifi, WifiOff, Sliders, Copy, MoreVertical, Play, Pause, Ban, Calendar,
   ToggleLeft, ToggleRight, Link, Hash, Layers, ExternalLink, Menu
@@ -165,6 +165,7 @@ function InstitutionsTab() {
   const [detailInst, setDetailInst] = useState<any>(null);
   const [form, setForm] = useState({ name: "", type: "hospital", address: "", phone: "", email: "", contactPerson: "", city: "", province: "" });
   const [loading, setLoading] = useState(true);
+  const [createResult, setCreateResult] = useState<any>(null);
 
   const fetchList = useCallback(async () => {
     try { setInstitutions(await apiFetch("/api/vendor/institutions")); } catch {}
@@ -178,9 +179,14 @@ function InstitutionsTab() {
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (editInst) { await apiFetch(`/api/vendor/institutions/${editInst.id}`, { method: "PATCH", body: JSON.stringify(form) }); }
-    else { await apiFetch("/api/vendor/institutions", { method: "POST", body: JSON.stringify(form) }); }
-    setShowModal(false); setEditInst(null); fetchList();
+    if (editInst) {
+      await apiFetch(`/api/vendor/institutions/${editInst.id}`, { method: "PATCH", body: JSON.stringify(form) });
+      setShowModal(false); setEditInst(null); fetchList();
+    } else {
+      const result = await apiFetch("/api/vendor/institutions", { method: "POST", body: JSON.stringify(form) });
+      setShowModal(false); setEditInst(null);
+      setCreateResult(result);
+    }
   };
 
   const toggleStatus = async (inst: any) => {
@@ -228,6 +234,26 @@ function InstitutionsTab() {
               <div><Label>Kontak Person</Label><Input value={form.contactPerson} onChange={e => setForm({ ...form, contactPerson: e.target.value })} /></div>
               <div className="flex gap-3 pt-3 border-t border-slate-100"><button type="button" onClick={() => setShowModal(false)} className="flex-1 py-2.5 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Batal</button><button type="submit" className="flex-1 py-2.5 bg-blue-600 text-white rounded-lg font-bold text-[10px] uppercase tracking-widest hover:bg-blue-700">{editInst ? "Simpan" : "Daftarkan"}</button></div>
             </form>
+          </motion.div>
+        </motion.div>
+      )}</AnimatePresence>
+
+      {/* Success modal showing admin credentials */}
+      <AnimatePresence>{createResult && (
+        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 bg-slate-900/60 z-50 flex items-center justify-center p-4" onClick={() => setCreateResult(null)}>
+          <motion.div initial={{ scale: 0.95 }} animate={{ scale: 1 }} exit={{ scale: 0.95 }} className="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden" onClick={e => e.stopPropagation()}>
+            <div className="bg-emerald-600 p-5 text-white"><h3 className="font-black uppercase text-sm tracking-tight flex items-center gap-2"><CheckCircle size={16} /> Registrasi Berhasil</h3></div>
+            <div className="p-5 space-y-4">
+              <p className="text-[10px] text-slate-500">Berikut adalah kredensial untuk login ke dashboard admin RS:</p>
+              <div className="bg-slate-50 rounded-xl p-4 space-y-3 border border-slate-200">
+                <div><label className="text-[8px] font-bold text-slate-400 uppercase tracking-widest">Email Admin</label><div className="text-sm font-bold text-slate-900 mt-0.5">{createResult.adminEmail}</div></div>
+                <div><label className="text-[8px] font-bold text-slate-400 uppercase tracking-widest">Password</label><div className="text-sm font-mono font-bold text-slate-900 mt-0.5">{createResult.adminPassword}</div></div>
+                <div><label className="text-[8px] font-bold text-slate-400 uppercase tracking-widest">URL RS Publik</label><div className="text-sm text-blue-600 mt-0.5">/rs/{createResult.slug}</div></div>
+                <div><label className="text-[8px] font-bold text-slate-400 uppercase tracking-widest">Tunnel Token</label><div className="text-sm font-mono text-slate-900 mt-0.5">{createResult.tunnelToken}</div></div>
+              </div>
+              <div className="p-3 bg-amber-50 rounded-lg border border-amber-200 flex items-start gap-2 text-[9px] text-amber-700"><AlertTriangle size={12} className="shrink-0 mt-0.5" /> Simpan data ini. Password tidak akan ditampilkan lagi.</div>
+              <button onClick={() => setCreateResult(null)} className="w-full py-3 bg-slate-900 text-white rounded-xl font-bold text-[10px] uppercase tracking-widest hover:bg-black">Tutup</button>
+            </div>
           </motion.div>
         </motion.div>
       )}</AnimatePresence>
