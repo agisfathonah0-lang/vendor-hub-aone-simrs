@@ -202,6 +202,10 @@ export async function migrate() {
   CREATE INDEX IF NOT EXISTS idx_notifications_user ON notifications(user_id);
   CREATE INDEX IF NOT EXISTS idx_rs_lab_results_rm ON rs_lab_results(institution_id, no_rm);
   CREATE INDEX IF NOT EXISTS idx_rs_doctor_schedules_inst ON rs_doctor_schedules(institution_id);
+  -- Add institution_id to tables that were missing it
+  ALTER TABLE audit_logs ADD COLUMN IF NOT EXISTS institution_id VARCHAR(128) REFERENCES institutions(id);
+  ALTER TABLE mobile_devices ADD COLUMN IF NOT EXISTS institution_id VARCHAR(128) REFERENCES institutions(id);
+  ALTER TABLE notifications ADD COLUMN IF NOT EXISTS institution_id VARCHAR(128) REFERENCES institutions(id);
   `;
   await query(sql);
   console.log("[DB] Hub schema migrated successfully");

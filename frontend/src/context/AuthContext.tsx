@@ -12,7 +12,7 @@ interface UserProfile {
 interface AuthContextType {
   user: UserProfile | null;
   loading: boolean;
-  login: (email: string, password: string) => Promise<void>;
+  login: (email: string, password: string) => Promise<any>;
   logout: () => void;
 }
 
@@ -53,6 +53,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     });
     localStorage.setItem("vps_token", data.token);
     setUser(data.user);
+    return data.user;
   };
 
   const logout = () => {

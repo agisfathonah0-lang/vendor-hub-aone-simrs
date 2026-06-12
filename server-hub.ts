@@ -19,7 +19,7 @@ import path from "path";
 import { fileURLToPath } from "url";
 import { query, migrate } from "./src/db.js";
 import { initTunnelServer } from "./src/tunnel/manager.js";
-import vendorRoutes from "./src/routes/vendor.js";
+import vendorRoutes, { verifyToken } from "./src/routes/vendor.js";
 import publicRoutes from "./src/routes/public.js";
 import syncRoutes from "./src/routes/sync.js";
 
@@ -58,11 +58,11 @@ const DOMAIN_CACHE_TTL = 60000;
 async function refreshDomainCache() {
   try {
     const result = await query(
-      "SELECT domain, rs_id, name FROM institutions WHERE domain IS NOT NULL AND status = 'active'"
+      "SELECT domain, id, name FROM institutions WHERE domain IS NOT NULL AND status = 'active'"
     );
     domainCache.clear();
     for (const row of result.rows) {
-      if (row.domain) domainCache.set(row.domain.toLowerCase(), { rsId: row.rs_id, name: row.name });
+      if (row.domain) domainCache.set(row.domain.toLowerCase(), { rsId: row.id, name: row.name });
     }
     lastDomainFetch = Date.now();
     console.log(`[DOMAIN] Cache: ${domainCache.size} active domains`);
@@ -146,8 +146,12 @@ app.use("/api/public", publicRoutes);
 // Sync API (dari RS lokal)
 app.use("/api/sync", syncRoutes);
 
-// Proxy: forward request ke RS tertentu via tunnel
+// Proxy: forward request ke RS tertentu via tunnel (super_admin only)
 app.all("/api/proxy/:rsId/*", async (req, res) => {
+  const authHeader = req.headers.authorization;
+  if (!authHeader?.startsWith("Bearer ") || !verifyToken(authHeader.slice(7))) {
+    return res.status(401).json({ error: "Unauthorized — super admin token required" });
+  }
   const rsId = req.params.rsId;
   const targetPath = "/" + req.params[0];
   try {

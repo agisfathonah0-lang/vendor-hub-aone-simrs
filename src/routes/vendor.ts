@@ -3,6 +3,7 @@
  */
 import { Router } from "express";
 import { query } from "../db.js";
+const verifyLimiter = new Map<string, { count: number; resetAt: number }>();
 import crypto from "crypto";
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from "fs";
 import path from "path";
@@ -38,7 +39,7 @@ function generateToken(): string {
   return crypto.randomUUID();
 }
 
-function verifyToken(token: string) {
+export function verifyToken(token: string) {
   const entry = tokens.get(token);
   if (!entry) return null;
   if (Date.now() > entry.expiry) { tokens.delete(token); saveTokens(); return null; }
@@ -68,19 +69,32 @@ async function requireSuperAdmin(req: any, res: any, next: any) {
   } catch { return res.status(500).json({ error: "Auth check failed" }); }
 }
 
+async function requireAdmin(req: any, res: any, next: any) {
+  if (!(req as any).vpsUser) return res.status(401).json({ error: "Unauthorized" });
+  try {
+    const result = await query("SELECT role, institution_id FROM users WHERE user_id = $1", [req.vpsUser.userId]);
+    if (!result.rowCount) return res.status(403).json({ error: "User not found" });
+    const role = result.rows[0].role;
+    if (!["super_admin", "admin_rs"].includes(role)) return res.status(403).json({ error: "Forbidden" });
+    (req as any).userRole = role;
+    (req as any).userInstId = result.rows[0].institution_id;
+    next();
+  } catch { return res.status(500).json({ error: "Auth check failed" }); }
+}
+
 // Auth
 router.post("/auth/login", async (req, res) => {
   const { email, password } = req.body;
   if (!email || !password) return res.status(400).json({ error: "Email dan password diperlukan." });
   try {
     const result = await query(
-      "SELECT user_id, email, display_name, role, institution_id, password_hash FROM users WHERE email = $1",
+      "SELECT u.user_id, u.email, u.display_name, u.role, u.institution_id, u.password_hash, i.url_slug FROM users u LEFT JOIN institutions i ON u.institution_id = i.id WHERE u.email = $1",
       [email]
     );
     if (!result.rowCount) return res.status(401).json({ error: "Email atau password salah." });
     const u = result.rows[0];
     if (u.status === "suspended") return res.status(403).json({ error: "Akun dinonaktifkan." });
-    if (u.role !== "super_admin") return res.status(403).json({ error: "Hanya Super Admin yang bisa login di Vendor Hub." });
+    if (!["super_admin", "admin_rs"].includes(u.role)) return res.status(403).json({ error: "Akses ditolak." });
     const hash = crypto.scryptSync(password, u.user_id.slice(0, 16), 64).toString("hex");
     if (hash !== u.password_hash) return res.status(401).json({ error: "Email atau password salah." });
     const tokenStr = generateToken();
@@ -96,6 +110,7 @@ router.post("/auth/login", async (req, res) => {
         displayName: u.display_name,
         role: u.role,
         institutionId: u.institution_id,
+        urlSlug: u.url_slug,
       },
     });
   } catch (err: any) {
@@ -611,6 +626,15 @@ router.post("/license/generate", requireSuperAdmin, async (req, res) => {
 
 // Verify a license key (called by local RS server)
 router.post("/license/verify", async (req, res) => {
+  const ip = req.ip || req.socket.remoteAddress || "unknown";
+  const now = Date.now();
+  const entry = verifyLimiter.get(ip);
+  if (entry && entry.resetAt > now) {
+    if (entry.count >= 10) return res.status(429).json({ valid: false, error: "Terlalu banyak percobaan. Coba lagi nanti." });
+    entry.count++;
+  } else {
+    verifyLimiter.set(ip, { count: 1, resetAt: now + 60000 });
+  }
   try {
     const { licenseKey } = req.body;
     if (!licenseKey) {
@@ -666,6 +690,67 @@ router.get("/institutions/:id/licenses", requireSuperAdmin, async (req, res) => 
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }
+});
+
+// ============================================================
+//  Admin RS — manage own website config
+// ============================================================
+
+// Get institution by slug or id (admin_rs scoped to own, super_admin can specify any)
+router.get("/my/institution", requireAdmin, async (req: any, res) => {
+  try {
+    const slug = req.query.slug as string;
+    const id = req.query.id as string;
+    let instId = id;
+    if (slug) {
+      const r = await query("SELECT id FROM institutions WHERE url_slug = $1", [slug]);
+      if (!r.rowCount) return res.status(404).json({ error: "Institusi tidak ditemukan." });
+      instId = r.rows[0].id;
+    }
+    if (req.userRole !== "super_admin") {
+      if (instId && instId !== req.userInstId) return res.status(403).json({ error: "Akses ditolak." });
+      instId = req.userInstId;
+    }
+    if (!instId) return res.status(400).json({ error: "Institution ID required" });
+    const result = await query(
+      "SELECT id, name, type, address, city, province, phone, email, status, modules, url_slug, domain FROM institutions WHERE id = $1",
+      [instId]
+    );
+    if (!result.rowCount) return res.status(404).json({ error: "Institusi tidak ditemukan." });
+    const inst = result.rows[0];
+    const configResult = await query("SELECT data FROM rs_public_config WHERE institution_id = $1", [instId]);
+    res.json({ ...inst, publicConfig: configResult.rows[0]?.data || {} });
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+// Update public website config (profile, gallery, polyclinics, etc.)
+router.patch("/my/institution/config", requireAdmin, async (req: any, res) => {
+  try {
+    const slug = req.query.slug as string;
+    const id = req.query.id as string;
+    let instId = id;
+    if (slug) {
+      const r = await query("SELECT id FROM institutions WHERE url_slug = $1", [slug]);
+      if (!r.rowCount) return res.status(404).json({ error: "Institusi tidak ditemukan." });
+      instId = r.rows[0].id;
+    }
+    if (req.userRole !== "super_admin") {
+      if (instId && instId !== req.userInstId) return res.status(403).json({ error: "Akses ditolak." });
+      instId = req.userInstId;
+    }
+    if (!instId) return res.status(400).json({ error: "Institution ID required" });
+    const { config } = req.body;
+    if (!config) return res.status(400).json({ error: "config required" });
+    const existing = await query("SELECT data FROM rs_public_config WHERE institution_id = $1", [instId]);
+    const merged = existing.rowCount ? { ...existing.rows[0].data, ...config } : config;
+    await query(
+      `INSERT INTO rs_public_config (institution_id, data, updated_at)
+       VALUES ($1, $2, CURRENT_TIMESTAMP)
+       ON CONFLICT (institution_id) DO UPDATE SET data = $2, updated_at = CURRENT_TIMESTAMP`,
+      [instId, JSON.stringify(merged)]
+    );
+    res.json({ success: true });
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
 });
 
 export default router;

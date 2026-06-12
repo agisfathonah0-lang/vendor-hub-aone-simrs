@@ -18,8 +18,8 @@ export default function Login() {
     setLoading(true);
     setError(null);
     try {
-      await login(email, password);
-      navigate("/admin");
+      const u = await login(email, password);
+      navigate(u?.role === "admin_rs" && u?.urlSlug ? `/rs/${u.urlSlug}/admin` : "/admin");
     } catch (err: any) {
       setError(err.message || "Gagal melakukan autentikasi.");
     } finally {

@@ -8,6 +8,7 @@ import PublicHome from "./components/PublicHome";
 import PublicDoctorSchedule from "./components/PublicDoctorSchedule";
 import PublicLabResult from "./components/PublicLabResult";
 import OnlineQueue from "./components/OnlineQueue";
+import AdminRSDashboard from "./components/AdminRSDashboard";
 import { apiFetch, cn, getInitials } from "./lib/utils";
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
@@ -22,6 +23,14 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
   );
   if (!user) return <Navigate to="/login" replace />;
   if (user.role !== "super_admin") return <Navigate to="/login" replace />;
+  return <>{children}</>;
+}
+
+function AdminRoute({ children }: { children: React.ReactNode }) {
+  const { user, loading } = useAuth();
+  if (loading) return <div className="min-h-screen flex items-center justify-center bg-slate-50"><div className="w-8 h-8 border-4 border-blue-600/20 border-t-blue-600 rounded-full animate-spin" /></div>;
+  if (!user) return <Navigate to="/login" replace />;
+  if (!["super_admin", "admin_rs"].includes(user.role)) return <Navigate to="/login" replace />;
   return <>{children}</>;
 }
 
@@ -129,6 +138,7 @@ export default function App() {
           <Route path="/rs/:slug/jadwal-dokter" element={<PublicDoctorSchedule />} />
           <Route path="/rs/:slug/hasil-lab" element={<PublicLabResult />} />
           <Route path="/rs/:slug/antrian" element={<OnlineQueue />} />
+          <Route path="/rs/:slug/admin" element={<AdminRoute><AdminRSDashboard /></AdminRoute>} />
           <Route path="/admin/*" element={<ProtectedRoute><SuperAdminDashboard /></ProtectedRoute>} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
