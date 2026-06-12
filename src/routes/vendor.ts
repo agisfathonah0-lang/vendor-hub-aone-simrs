@@ -775,11 +775,9 @@ router.patch("/my/institution/config", requireAdmin, async (req: any, res) => {
 // Upload image (admin only)
 import multer from "multer";
 import path from "path";
-import { fileURLToPath } from "url";
 import crypto from "crypto";
-const _ud = path.dirname(fileURLToPath(import.meta.url));
 const upload = multer({
-  dest: path.join(_ud, "../../uploads"),
+  dest: path.join(process.cwd(), "uploads"),
   limits: { fileSize: 5 * 1024 * 1024 },
   fileFilter: (_req, file, cb) => {
     if (!file.mimetype.startsWith("image/")) return cb(new Error("Only images allowed"));
