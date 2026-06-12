@@ -168,6 +168,29 @@ export async function migrate() {
     END IF;
   END $$;
 
+  -- RS Public Data (synced from local RS)
+  CREATE TABLE IF NOT EXISTS rs_public_config (
+    institution_id VARCHAR(128) PRIMARY KEY REFERENCES institutions(id),
+    data JSONB NOT NULL DEFAULT '{}'::jsonb,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+  );
+
+  CREATE TABLE IF NOT EXISTS rs_doctor_schedules (
+    id VARCHAR(128) PRIMARY KEY,
+    institution_id VARCHAR(128) REFERENCES institutions(id),
+    data JSONB NOT NULL DEFAULT '{}'::jsonb,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+  );
+
+  CREATE TABLE IF NOT EXISTS rs_lab_results (
+    id VARCHAR(128) PRIMARY KEY,
+    institution_id VARCHAR(128) REFERENCES institutions(id),
+    no_rm VARCHAR(50) NOT NULL,
+    patient_name VARCHAR(255),
+    data JSONB NOT NULL DEFAULT '{}'::jsonb,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+  );
+
   -- Indexes
   CREATE INDEX IF NOT EXISTS idx_users_institution ON users(institution_id);
   CREATE INDEX IF NOT EXISTS idx_users_role ON users(role);
@@ -177,6 +200,8 @@ export async function migrate() {
   CREATE INDEX IF NOT EXISTS idx_sync_log_institution ON sync_log(institution_id);
   CREATE INDEX IF NOT EXISTS idx_sync_log_status ON sync_log(status);
   CREATE INDEX IF NOT EXISTS idx_notifications_user ON notifications(user_id);
+  CREATE INDEX IF NOT EXISTS idx_rs_lab_results_rm ON rs_lab_results(institution_id, no_rm);
+  CREATE INDEX IF NOT EXISTS idx_rs_doctor_schedules_inst ON rs_doctor_schedules(institution_id);
   `;
   await query(sql);
   console.log("[DB] Hub schema migrated successfully");

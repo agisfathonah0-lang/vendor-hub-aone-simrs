@@ -21,6 +21,7 @@ import { query, migrate } from "./src/db.js";
 import { initTunnelServer } from "./src/tunnel/manager.js";
 import vendorRoutes from "./src/routes/vendor.js";
 import publicRoutes from "./src/routes/public.js";
+import syncRoutes from "./src/routes/sync.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PORT = parseInt(process.env.PORT || "4000");
@@ -141,6 +142,9 @@ app.use("/api/vendor", vendorRoutes);
 
 // Public & Mobile API
 app.use("/api/public", publicRoutes);
+
+// Sync API (dari RS lokal)
+app.use("/api/sync", syncRoutes);
 
 // Proxy: forward request ke RS tertentu via tunnel
 app.all("/api/proxy/:rsId/*", async (req, res) => {

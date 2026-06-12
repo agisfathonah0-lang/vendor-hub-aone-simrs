@@ -4,6 +4,10 @@ import { Shield, Building2, Activity, ArrowRight, Server, Wifi, Users, CreditCar
 import { AuthProvider, useAuth } from "./context/AuthContext";
 import Login from "./components/Login";
 import SuperAdminDashboard from "./components/SuperAdminDashboard";
+import PublicHome from "./components/PublicHome";
+import PublicDoctorSchedule from "./components/PublicDoctorSchedule";
+import PublicLabResult from "./components/PublicLabResult";
+import OnlineQueue from "./components/OnlineQueue";
 import { apiFetch, cn, getInitials } from "./lib/utils";
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
@@ -59,14 +63,14 @@ function LandingPage() {
           </div>
         </div>
 
-        {/* Institution List */}
         {institutions.length > 0 && (
           <div className="mb-16">
             <h3 className="text-[10px] font-black text-slate-900 uppercase tracking-widest mb-4 flex items-center gap-2"><Building2 size={12} /> Institusi Terdaftar</h3>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
               {institutions.map((inst: any) => (
                 <div key={inst.id}
-                  className="bg-white p-4 rounded-xl border border-slate-200 flex items-center justify-between group">
+                  className="bg-white p-4 rounded-xl border border-slate-200 flex items-center justify-between group hover:shadow-md transition-all cursor-pointer"
+                  onClick={() => window.location.href = `/rs/${inst.url_slug}`}>
                   <div className="flex items-center gap-3">
                     <div className="w-10 h-10 rounded-lg bg-slate-800 flex items-center justify-center text-white text-[10px] font-bold">{getInitials(inst.name)}</div>
                     <div>
@@ -74,6 +78,7 @@ function LandingPage() {
                       <div className="text-[8px] text-slate-400 mt-0.5">{inst.city || "-"} &middot; <span className="uppercase">{inst.type}</span></div>
                     </div>
                   </div>
+                  <ChevronRight size={14} className="text-slate-300 group-hover:text-slate-500 transition-colors" />
                 </div>
               ))}
             </div>
@@ -87,7 +92,7 @@ function LandingPage() {
             { icon: Shield, title: "Keamanan Terpusat", desc: "Manajemen user, lisensi, dan akses dari vendor hub dengan enkripsi scrypt.", color: "text-purple-600", bg: "bg-purple-50" },
             { icon: Activity, title: "Monitoring Langsung", desc: "Pantau status koneksi, versi software, dan kesehatan server setiap RS secara real-time.", color: "text-orange-600", bg: "bg-orange-50" },
             { icon: CreditCard, title: "Lisensi & Tagihan", desc: "Atur plan, masa aktif, dan harga langganan per institusi dari panel terpusat.", color: "text-cyan-600", bg: "bg-cyan-50" },
-            { icon: Globe, title: "Domain Kustom", desc: "Setiap institusi mendapat domain khusus untuk akses publik yang dikelola dari vendor hub.", color: "text-indigo-600", bg: "bg-indigo-50" },
+            { icon: Globe, title: "Website RS", desc: "Setiap RS mendapat halaman publik sendiri (profil, jadwal dokter, hasil lab, antrian online).", color: "text-indigo-600", bg: "bg-indigo-50" },
           ].map((item, i) => (
             <div key={i} className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm hover:shadow-md transition-all">
               <div className={cn("w-10 h-10 rounded-lg flex items-center justify-center mb-4", item.bg)}><item.icon size={20} className={item.color} /></div>
@@ -120,6 +125,10 @@ export default function App() {
         <Routes>
           <Route path="/" element={<LandingPage />} />
           <Route path="/login" element={<Login />} />
+          <Route path="/rs/:slug" element={<PublicHome />} />
+          <Route path="/rs/:slug/jadwal-dokter" element={<PublicDoctorSchedule />} />
+          <Route path="/rs/:slug/hasil-lab" element={<PublicLabResult />} />
+          <Route path="/rs/:slug/antrian" element={<OnlineQueue />} />
           <Route path="/admin/*" element={<ProtectedRoute><SuperAdminDashboard /></ProtectedRoute>} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
