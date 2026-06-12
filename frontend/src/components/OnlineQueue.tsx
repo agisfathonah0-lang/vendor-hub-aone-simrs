@@ -3,7 +3,7 @@ import { useParams, Link } from "react-router-dom";
 import { Calendar, Clock, ChevronLeft, User, Stethoscope, Send, CheckCircle, AlertCircle } from "lucide-react";
 import { useSEO } from "../lib/useSEO";
 
-const DEPARTMENTS = ["Poli Umum", "Poli Gigi", "Poli Anak", "Poli Kandungan", "Poli Mata", "Poli THT", "Poli Saraf", "Poli Jantung", "Poli Kulit", "IGD"];
+const FALLBACK_DEPARTMENTS = ["Poli Umum", "Poli Gigi", "Poli Anak", "Poli Kandungan", "Poli Mata", "Poli THT", "Poli Saraf", "Poli Jantung", "Poli Kulit", "IGD"];
 
 export default function OnlineQueue() {
   const { slug } = useParams();
@@ -11,10 +11,17 @@ export default function OnlineQueue() {
   const [submitting, setSubmitting] = useState(false);
   const [result, setResult] = useState<{ success?: boolean; queueNumber?: string; error?: string }>({});
   const [meta, setMeta] = useState<any>(null);
+  const [polyclinics, setPolyclinics] = useState<string[]>([]);
 
   useEffect(() => {
     if (!slug) return;
-    fetch(`/api/public/${slug}/meta`).then(r => r.json()).then(d => setMeta(d)).catch(() => {});
+    fetch(`/api/public/${slug}/home`).then(r => r.json()).then(d => {
+      setMeta(d.institution);
+      const list = d.config?.polyclinics || [];
+      setPolyclinics(list.map((p: any) => p.name).filter(Boolean));
+    }).catch(() => {
+      fetch(`/api/public/${slug}/meta`).then(r => r.json()).then(d => setMeta(d)).catch(() => {});
+    });
   }, [slug]);
 
   useSEO(meta ? `Antrian Online — ${meta.name}` : "Antrian Online", `Ambil nomor antrian online di ${meta?.name || slug} — daftar antrian tanpa datang langsung.`);
@@ -95,7 +102,7 @@ export default function OnlineQueue() {
                 <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1 block">Poli Tujuan *</label>
                 <select value={form.department} onChange={e => setForm({...form, department: e.target.value})} required className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-blue-500/20">
                   <option value="">-- Pilih Poli --</option>
-                  {DEPARTMENTS.map(d => <option key={d} value={d}>{d}</option>)}
+                  {(polyclinics.length ? polyclinics : FALLBACK_DEPARTMENTS).map(d => <option key={d} value={d}>{d}</option>)}
                 </select>
               </div>
               <div className="md:col-span-2">
