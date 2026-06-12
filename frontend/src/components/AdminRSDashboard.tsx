@@ -211,6 +211,7 @@ export default function AdminRSDashboard() {
 
 function ProfileEditor({ cfg, setNested }: { cfg: any; setNested: (path: string, val: any) => void }) {
   const [uploading, setUploading] = useState(false);
+  const [uploadOk, setUploadOk] = useState<string | null>(null);
   const uploadFile = async (field: string) => {
     const input = document.createElement("input");
     input.type = "file";
@@ -219,12 +220,13 @@ function ProfileEditor({ cfg, setNested }: { cfg: any; setNested: (path: string,
       const file = input.files?.[0];
       if (!file) return;
       setUploading(true);
+      setUploadOk(null);
       const fd = new FormData();
       fd.append("file", file);
       try {
         const r = await fetch("/api/vendor/upload", { method: "POST", headers: { Authorization: "Bearer " + localStorage.getItem("vps_token") }, body: fd });
         const d = await r.json();
-        if (d.url) setNested(field, d.url);
+        if (d.url) { setNested(field, d.url); setUploadOk(field); setTimeout(() => setUploadOk(null), 2000); }
       } catch { alert("Upload gagal"); }
       setUploading(false);
     };
@@ -241,7 +243,7 @@ function ProfileEditor({ cfg, setNested }: { cfg: any; setNested: (path: string,
             <label className="text-[8px] font-bold text-slate-500 uppercase tracking-widest mb-1 block">Foto Banner</label>
             <div className="flex items-center gap-2">
               {cfg.heroImage && <img src={cfg.heroImage} className="w-16 h-10 rounded object-cover border" alt="" />}
-              <button onClick={() => uploadFile("heroImage")} disabled={uploading} className="px-3 py-2 bg-slate-100 text-slate-600 rounded-lg text-[8px] font-bold uppercase tracking-widest hover:bg-slate-200">{uploading ? "..." : "Pilih Foto"}</button>
+              <button onClick={() => uploadFile("heroImage")} disabled={uploading} className={`px-3 py-2 rounded-lg text-[8px] font-bold uppercase tracking-widest transition-all ${uploadOk === "heroImage" ? "bg-emerald-100 text-emerald-600" : "bg-slate-100 text-slate-600 hover:bg-slate-200"}`}>{uploading ? "..." : uploadOk === "heroImage" ? "Berhasil" : "Pilih Foto"}</button>
               {cfg.heroImage && <button onClick={() => setNested("heroImage", "")} className="px-3 py-2 text-red-400 text-[8px] font-bold uppercase tracking-widest hover:text-red-600">Hapus</button>}
             </div>
           </div>

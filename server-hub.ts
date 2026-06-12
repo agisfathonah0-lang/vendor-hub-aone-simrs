@@ -196,7 +196,11 @@ app.all("/api/proxy/:rsId/*", async (req, res) => {
 app.use("/api", (_req, res) => res.status(404).json({ error: "API endpoint tidak ditemukan" }));
 
 // Serve uploads & frontend SPA build
-const UPLOAD_DIR = path.join(__dirname, "uploads");
+// Multer (in vendor.ts) resolves ../../uploads from the bundled file → project root /uploads
+// So we must serve from the same directory
+const UPLOAD_DIR = isDist
+  ? path.join(__dirname, "..", "uploads")
+  : path.join(__dirname, "uploads");
 if (!existsSync(UPLOAD_DIR)) mkdirSync(UPLOAD_DIR, { recursive: true });
 app.use("/uploads", express.static(UPLOAD_DIR));
 app.use(express.static(FRONTEND_DIR));
