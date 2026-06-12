@@ -10,27 +10,39 @@ import { apiFetch, cn } from "../lib/utils";
 function useImageUpload() {
   const [uploading, setUploading] = useState<Record<string, boolean>>({});
   const [uploadOk, setUploadOk] = useState<Record<string, boolean>>({});
-  const doUpload = async (field: string, cb: (url: string) => void) => {
+  const [progress, setProgress] = useState<Record<string, number>>({});
+  const doUpload = (field: string, cb: (url: string) => void) => {
     const input = document.createElement("input");
     input.type = "file";
     input.accept = "image/*";
-    input.onchange = async () => {
+    input.onchange = () => {
       const file = input.files?.[0];
       if (!file) return;
       setUploading(p => ({ ...p, [field]: true }));
       setUploadOk(p => ({ ...p, [field]: false }));
+      setProgress(p => ({ ...p, [field]: 0 }));
       const fd = new FormData();
       fd.append("file", file);
-      try {
-        const r = await fetch("/api/vendor/upload", { method: "POST", headers: { Authorization: "Bearer " + localStorage.getItem("vps_token") }, body: fd });
-        const d = await r.json();
-        if (d.url) { cb(d.url); setUploadOk(p => ({ ...p, [field]: true })); setTimeout(() => setUploadOk(p => ({ ...p, [field]: false })), 2000); }
-      } catch { alert("Upload gagal"); }
-      setUploading(p => ({ ...p, [field]: false }));
+      const xhr = new XMLHttpRequest();
+      xhr.upload.onprogress = (e) => {
+        if (e.lengthComputable) setProgress(p => ({ ...p, [field]: Math.round((e.loaded / e.total) * 100) }));
+      };
+      xhr.onload = () => {
+        if (xhr.status === 200) {
+          const d = JSON.parse(xhr.responseText);
+          if (d.url) { cb(d.url); setUploadOk(p => ({ ...p, [field]: true })); setTimeout(() => setUploadOk(p => ({ ...p, [field]: false })), 2000); }
+        } else { alert("Upload gagal"); }
+        setUploading(p => ({ ...p, [field]: false }));
+        setProgress(p => ({ ...p, [field]: 0 }));
+      };
+      xhr.onerror = () => { alert("Upload gagal"); setUploading(p => ({ ...p, [field]: false })); setProgress(p => ({ ...p, [field]: 0 })); };
+      xhr.open("POST", "/api/vendor/upload");
+      xhr.setRequestHeader("Authorization", "Bearer " + localStorage.getItem("vps_token"));
+      xhr.send(fd);
     };
     input.click();
   };
-  return { uploading, uploadOk, doUpload };
+  return { uploading, uploadOk, progress, doUpload };
 }
 
 function ImagePreview({ src, onRemove }: { src: string; onRemove?: () => void }) {
@@ -282,6 +294,7 @@ function ImageField({ label, value, onChange, onRemove, img, field }: {
   label: string; value: string; onChange: (v: string) => void; onRemove: () => void;
   img: any; field: string;
 }) {
+  const pct = img.progress[field];
   return (
     <div className="md:col-span-2">
       <label className="text-[8px] font-bold text-slate-500 uppercase tracking-widest mb-1 block">{label}</label>
@@ -290,9 +303,14 @@ function ImageField({ label, value, onChange, onRemove, img, field }: {
         <button onClick={() => img.doUpload(field, onChange)} disabled={img.uploading[field]}
           className={`px-3 py-2 rounded-lg text-[8px] font-bold uppercase tracking-widest transition-all flex items-center gap-1.5 ${img.uploadOk[field] ? "bg-emerald-100 text-emerald-600" : "bg-slate-100 text-slate-600 hover:bg-slate-200"}`}>
           {img.uploading[field] ? <div className="w-3 h-3 border-2 border-current border-t-transparent rounded-full animate-spin" /> : img.uploadOk[field] ? <CheckCircle size={12} /> : <Upload size={12} />}
-          {img.uploading[field] ? "Upload..." : img.uploadOk[field] ? "Berhasil" : "Upload"}
+          {img.uploading[field] ? `${pct || 0}%` : img.uploadOk[field] ? "Berhasil" : "Upload"}
         </button>
       </div>
+      {img.uploading[field] && (
+        <div className="mt-2 w-full bg-slate-100 rounded-full h-1.5 overflow-hidden">
+          <div className="bg-blue-600 h-full rounded-full transition-all duration-300" style={{ width: `${pct || 0}%` }} />
+        </div>
+      )}
     </div>
   );
 }
@@ -302,29 +320,28 @@ function GalleryEditor({ items, onAdd, onRemove, onChange, img }: {
   onChange: (i: number, f: string, v: string) => void; img: any;
 }) {
   const addNew = () => {
-    const input = document.createElement("input");
-    input.type = "file";
-    input.accept = "image/*";
-    input.onchange = async () => {
-      const file = input.files?.[0];
-      if (!file) return;
-      const fd = new FormData();
-      fd.append("file", file);
-      try {
-        const r = await fetch("/api/vendor/upload", { method: "POST", headers: { Authorization: "Bearer " + localStorage.getItem("vps_token") }, body: fd });
-        const d = await r.json();
-        if (d.url) onAdd({ image: d.url, caption: "", type: "Kegiatan" });
-      } catch { alert("Upload gagal"); }
-    };
-    input.click();
+    img.doUpload("gallery_new", (url: string) => onAdd({ image: url, caption: "", type: "Kegiatan" }));
   };
 
   return (
     <div className="bg-white p-5 rounded-xl border border-slate-200 space-y-4">
       <div className="flex items-center justify-between">
         <h3 className="text-[10px] font-black text-slate-900 uppercase tracking-widest">Galeri ({items.length})</h3>
-        <button onClick={addNew} className="px-3 py-1.5 bg-blue-600 text-white rounded-lg text-[8px] font-bold uppercase tracking-widest hover:bg-blue-700 flex items-center gap-1"><Upload size={10} /> Upload</button>
+        <div className="flex items-center gap-2">
+          {img.uploading["gallery_new"] && (
+            <span className="text-[8px] text-blue-600 font-bold">{img.progress["gallery_new"] || 0}%</span>
+          )}
+          <button onClick={addNew} disabled={img.uploading["gallery_new"]}
+            className={`px-3 py-1.5 rounded-lg text-[8px] font-bold uppercase tracking-widest flex items-center gap-1 transition-all ${img.uploading["gallery_new"] ? "bg-blue-300 text-white cursor-not-allowed" : "bg-blue-600 text-white hover:bg-blue-700"}`}>
+            <Upload size={10} /> {img.uploading["gallery_new"] ? "Upload..." : "Upload"}
+          </button>
+        </div>
       </div>
+      {img.uploading["gallery_new"] && (
+        <div className="w-full bg-slate-100 rounded-full h-1.5 overflow-hidden">
+          <div className="bg-blue-600 h-full rounded-full transition-all duration-300" style={{ width: `${img.progress["gallery_new"] || 0}%` }} />
+        </div>
+      )}
       {items.length === 0 && <p className="text-[10px] text-slate-400 text-center py-4">Belum ada foto. Klik Upload untuk menambah.</p>}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
         {items.map((item: any, i: number) => (
