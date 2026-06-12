@@ -1,0 +1,12 @@
+[DB] Public config sections patched
+[DB] Hub schema migrated successfully
+[DOMAIN] Cache: 0 active domains
+[TUNNEL] Server ready at /tunnel
+===========================================================
+  AONE TRUST SIMRS Hub v3
+  Port       : 4000
+  Mode       : HTTP
+  Vendor Hub : http://localhost:4000/api/vendor
+  Public API : http://localhost:4000/api/public
+  Tunnel     : ws://localhost:4000/tunnel
+===========================================================

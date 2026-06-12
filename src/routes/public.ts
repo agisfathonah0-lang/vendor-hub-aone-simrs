@@ -22,9 +22,17 @@ router.get("/:slug/home", async (req, res) => {
       query("SELECT data FROM rs_public_config WHERE institution_id = (SELECT id FROM institutions WHERE url_slug = $1)", [slug]),
     ]);
     if (!inst.rowCount) return res.status(404).json({ error: "RS tidak ditemukan." });
+    const rawConfig = config.rows[0]?.data || {};
+    const defaultConfig = {
+      heroImage: "", name: "", tagline: "",
+      branding: { logo: "", primaryColor: "#1e40af" },
+      profile: { description: "", vision: "", mission: "" },
+      gallery: [], polyclinics: [], organizationStructure: [],
+      promotions: [], services: [], operationalHours: [],
+    };
     res.json({
       institution: inst.rows[0],
-      config: config.rows[0]?.data || {},
+      config: { ...defaultConfig, ...rawConfig },
     });
   } catch (err: any) { res.status(500).json({ error: err.message }); }
 });
