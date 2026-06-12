@@ -319,7 +319,26 @@ router.post("/institutions", requireSuperAdmin, async (req, res) => {
       [id, tunnelToken]
     );
 
-    // 3) Auto-create admin_rs user
+    // 3a) Auto-create rs_public_config with default sections
+    const defaultConfig = {
+      name, tagline: "",
+      heroImage: "", branding: { logo: "", primaryColor: "#1e40af" },
+      profile: { description: "", vision: "", mission: "" },
+      gallery: [],
+      polyclinics: [],
+      organizationStructure: [],
+      promotions: [],
+      services: [],
+      operationalHours: [],
+    };
+    await query(
+      `INSERT INTO rs_public_config (institution_id, data, updated_at)
+       VALUES ($1, $2, CURRENT_TIMESTAMP)
+       ON CONFLICT (institution_id) DO NOTHING`,
+      [id, JSON.stringify(defaultConfig)]
+    );
+
+    // 4) Auto-create admin_rs user (step moved from 3)
     const adminRsId = "USR-" + crypto.randomUUID().slice(0, 8).toUpperCase();
     const rsEmail = adminEmail || `admin@${slug}.aone-trust.com`;
     const rsPassword = adminPassword || crypto.randomUUID().slice(0, 12) + "Aa1!";
