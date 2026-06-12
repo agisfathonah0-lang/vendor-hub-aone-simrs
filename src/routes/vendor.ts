@@ -118,7 +118,7 @@ router.post("/auth/login", async (req, res) => {
   }
 });
 
-router.get("/auth/me", requireSuperAdmin, async (req: any, res) => {
+router.get("/auth/me", requireAdmin, async (req: any, res) => {
   try {
     const result = await query(
       "SELECT user_id, email, display_name, role, institution_id, status FROM users WHERE user_id = $1",
