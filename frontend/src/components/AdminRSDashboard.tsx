@@ -2,9 +2,46 @@ import { useState, useEffect } from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
 import {
   Globe, Save, LogOut, Plus, X, ChevronDown, ChevronRight,
-  Image, Users, Building2, Activity, AlertCircle, CheckCircle, ArrowLeft, Menu
+  Image, Users, Building2, Activity, AlertCircle, CheckCircle, ArrowLeft, Menu,
+  Upload, Trash2
 } from "lucide-react";
 import { apiFetch, cn } from "../lib/utils";
+
+function useImageUpload() {
+  const [uploading, setUploading] = useState<Record<string, boolean>>({});
+  const [uploadOk, setUploadOk] = useState<Record<string, boolean>>({});
+  const doUpload = async (field: string, cb: (url: string) => void) => {
+    const input = document.createElement("input");
+    input.type = "file";
+    input.accept = "image/*";
+    input.onchange = async () => {
+      const file = input.files?.[0];
+      if (!file) return;
+      setUploading(p => ({ ...p, [field]: true }));
+      setUploadOk(p => ({ ...p, [field]: false }));
+      const fd = new FormData();
+      fd.append("file", file);
+      try {
+        const r = await fetch("/api/vendor/upload", { method: "POST", headers: { Authorization: "Bearer " + localStorage.getItem("vps_token") }, body: fd });
+        const d = await r.json();
+        if (d.url) { cb(d.url); setUploadOk(p => ({ ...p, [field]: true })); setTimeout(() => setUploadOk(p => ({ ...p, [field]: false })), 2000); }
+      } catch { alert("Upload gagal"); }
+      setUploading(p => ({ ...p, [field]: false }));
+    };
+    input.click();
+  };
+  return { uploading, uploadOk, doUpload };
+}
+
+function ImagePreview({ src, onRemove }: { src: string; onRemove?: () => void }) {
+  if (!src) return null;
+  return (
+    <div className="relative group w-20 h-14 rounded-lg overflow-hidden border border-slate-200 shrink-0">
+      <img src={src} alt="" className="w-full h-full object-cover" onError={e => { (e.target as HTMLImageElement).style.display = "none"; }} />
+      {onRemove && <button onClick={onRemove} className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white"><X size={14} /></button>}
+    </div>
+  );
+}
 
 export default function AdminRSDashboard() {
   const { slug } = useParams();
@@ -16,6 +53,9 @@ export default function AdminRSDashboard() {
   const [saved, setSaved] = useState(false);
   const [tab, setTab] = useState<"profile" | "polyclinics" | "gallery" | "promotions" | "services" | "hours">("profile");
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [toast, setToast] = useState<{ type: "success" | "error"; msg: string } | null>(null);
+  const showToast = (type: "success" | "error", msg: string) => { setToast({ type, msg }); setTimeout(() => setToast(null), 3000); };
+  const img = useImageUpload();
 
   useEffect(() => {
     const token = localStorage.getItem("vps_token");
@@ -40,8 +80,9 @@ export default function AdminRSDashboard() {
         body: JSON.stringify({ config: cfg }),
       });
       setSaved(true);
+      showToast("success", "Perubahan berhasil disimpan!");
       setTimeout(() => setSaved(false), 3000);
-    } catch (err: any) { alert(err.message); }
+    } catch (err: any) { showToast("error", err.message || "Gagal menyimpan"); }
     setSaving(false);
   };
 
@@ -112,7 +153,11 @@ export default function AdminRSDashboard() {
 
   return (
     <div className="min-h-screen bg-slate-50 flex">
-      {/* Sidebar */}
+      {toast && (
+        <div className={`fixed top-4 right-4 z-50 px-4 py-3 rounded-xl shadow-lg text-[10px] font-bold uppercase tracking-widest flex items-center gap-2 ${toast.type === "success" ? "bg-emerald-600 text-white" : "bg-red-600 text-white"}`}>
+          {toast.type === "success" ? <CheckCircle size={14} /> : <AlertCircle size={14} />} {toast.msg}
+        </div>
+      )}
       <div className={`fixed md:relative z-40 inset-y-0 left-0 w-56 bg-slate-900 text-white flex flex-col transition-transform duration-200 ${sidebarOpen ? "translate-x-0" : "-translate-x-full"} md:translate-x-0`}>
         <div className="p-4 border-b border-slate-800 flex items-center justify-between">
           <div className="flex items-center gap-2 mb-2">
@@ -141,7 +186,6 @@ export default function AdminRSDashboard() {
       </div>
       {sidebarOpen && <div onClick={() => setSidebarOpen(false)} className="fixed inset-0 bg-black/30 z-30 md:hidden" />}
 
-      {/* Content */}
       <div className="flex-1 overflow-y-auto">
         <div className="max-w-4xl mx-auto p-4 md:p-6">
           <div className="flex items-center gap-3 md:gap-0 mb-6">
@@ -158,7 +202,7 @@ export default function AdminRSDashboard() {
             </button>
           </div>
 
-          {tab === "profile" && <ProfileEditor cfg={cfg} setNested={setNested} />}
+          {tab === "profile" && <ProfileEditor cfg={cfg} setNested={setNested} img={img} />}
           {tab === "polyclinics" && <ArrayEditor title="Poli & Spesialis" items={cfg.polyclinics || []} fields={[
             { key: "name", label: "Nama Poli", placeholder: "Poli Umum" },
             { key: "description", label: "Deskripsi", placeholder: "Pelayanan kesehatan dasar" },
@@ -172,22 +216,13 @@ export default function AdminRSDashboard() {
               </div>
             )} />}
 
-          {tab === "gallery" && <ArrayEditor title="Galeri" items={cfg.gallery || []} fields={[
-            { key: "image", label: "URL Gambar", placeholder: "https://..." },
-            { key: "caption", label: "Keterangan", placeholder: "Kegiatan bakti sosial" },
-            { key: "type", label: "Tipe", placeholder: "Kegiatan / Prestasi" },
-          ]} addTemplate={{ image: "", caption: "", type: "Kegiatan" }}
+          {tab === "gallery" && <GalleryEditor items={cfg.gallery || []}
             onAdd={(t) => addArrayItem("gallery", t)} onRemove={(i) => removeArrayItem("gallery", i)}
-            onChange={(i, f, v) => updateArrayItem("gallery", i, f, v)} />}
+            onChange={(i, f, v) => updateArrayItem("gallery", i, f, v)} img={img} />}
 
-          {tab === "promotions" && <ArrayEditor title="Promo & Berita" items={cfg.promotions || []} fields={[
-            { key: "type", label: "Tipe", placeholder: "Promo / Berita / Pengumuman" },
-            { key: "title", label: "Judul", placeholder: "MCU Paket Hemat" },
-            { key: "description", label: "Deskripsi", placeholder: "..." },
-            { key: "image", label: "URL Gambar (opsional)", placeholder: "https://..." },
-          ]} addTemplate={{ type: "Promo", title: "", description: "", image: "" }}
+          {tab === "promotions" && <PromoEditor items={cfg.promotions || []}
             onAdd={(t) => addArrayItem("promotions", t)} onRemove={(i) => removeArrayItem("promotions", i)}
-            onChange={(i, f, v) => updateArrayItem("promotions", i, f, v)} />}
+            onChange={(i, f, v) => updateArrayItem("promotions", i, f, v)} img={img} />}
 
           {tab === "services" && <ArrayEditor title="Layanan" items={cfg.services || []} fields={[
             { key: "name", label: "Nama Layanan", placeholder: "IGD 24 Jam" },
@@ -209,29 +244,7 @@ export default function AdminRSDashboard() {
   );
 }
 
-function ProfileEditor({ cfg, setNested }: { cfg: any; setNested: (path: string, val: any) => void }) {
-  const [uploading, setUploading] = useState(false);
-  const [uploadOk, setUploadOk] = useState<string | null>(null);
-  const uploadFile = async (field: string) => {
-    const input = document.createElement("input");
-    input.type = "file";
-    input.accept = "image/*";
-    input.onchange = async () => {
-      const file = input.files?.[0];
-      if (!file) return;
-      setUploading(true);
-      setUploadOk(null);
-      const fd = new FormData();
-      fd.append("file", file);
-      try {
-        const r = await fetch("/api/vendor/upload", { method: "POST", headers: { Authorization: "Bearer " + localStorage.getItem("vps_token") }, body: fd });
-        const d = await r.json();
-        if (d.url) { setNested(field, d.url); setUploadOk(field); setTimeout(() => setUploadOk(null), 2000); }
-      } catch { alert("Upload gagal"); }
-      setUploading(false);
-    };
-    input.click();
-  };
+function ProfileEditor({ cfg, setNested, img }: { cfg: any; setNested: (path: string, val: any) => void; img: any }) {
   return (
     <div className="space-y-4">
       <div className="bg-white p-5 rounded-xl border border-slate-200 space-y-4">
@@ -239,14 +252,8 @@ function ProfileEditor({ cfg, setNested }: { cfg: any; setNested: (path: string,
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <Field label="Nama RS" value={cfg.name || ""} onChange={v => setNested("name", v)} />
           <Field label="Tagline" value={cfg.tagline || ""} onChange={v => setNested("tagline", v)} />
-          <div className="md:col-span-2">
-            <label className="text-[8px] font-bold text-slate-500 uppercase tracking-widest mb-1 block">Foto Banner</label>
-            <div className="flex items-center gap-2">
-              {cfg.heroImage && <img src={cfg.heroImage} className="w-16 h-10 rounded object-cover border" alt="" />}
-              <button onClick={() => uploadFile("heroImage")} disabled={uploading} className={`px-3 py-2 rounded-lg text-[8px] font-bold uppercase tracking-widest transition-all ${uploadOk === "heroImage" ? "bg-emerald-100 text-emerald-600" : "bg-slate-100 text-slate-600 hover:bg-slate-200"}`}>{uploading ? "..." : uploadOk === "heroImage" ? "Berhasil" : "Pilih Foto"}</button>
-              {cfg.heroImage && <button onClick={() => setNested("heroImage", "")} className="px-3 py-2 text-red-400 text-[8px] font-bold uppercase tracking-widest hover:text-red-600">Hapus</button>}
-            </div>
-          </div>
+          <ImageField label="Logo" value={cfg.branding?.logo || ""} onChange={v => setNested("branding.logo", v)} onRemove={() => setNested("branding.logo", "")} img={img} field="branding.logo" />
+          <ImageField label="Foto Banner" value={cfg.heroImage || ""} onChange={v => setNested("heroImage", v)} onRemove={() => setNested("heroImage", "")} img={img} field="heroImage" />
         </div>
         <div>
           <label className="text-[8px] font-bold text-slate-500 uppercase tracking-widest mb-1 block">Deskripsi</label>
@@ -266,6 +273,120 @@ function ProfileEditor({ cfg, setNested }: { cfg: any; setNested: (path: string,
           <textarea value={cfg.profile?.mission || ""} onChange={e => setNested("profile.mission", e.target.value)}
             className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-xs outline-none min-h-[60px]" />
         </div>
+      </div>
+    </div>
+  );
+}
+
+function ImageField({ label, value, onChange, onRemove, img, field }: {
+  label: string; value: string; onChange: (v: string) => void; onRemove: () => void;
+  img: any; field: string;
+}) {
+  return (
+    <div className="md:col-span-2">
+      <label className="text-[8px] font-bold text-slate-500 uppercase tracking-widest mb-1 block">{label}</label>
+      <div className="flex items-center gap-3 flex-wrap">
+        {value && <ImagePreview src={value} onRemove={onRemove} />}
+        <button onClick={() => img.doUpload(field, onChange)} disabled={img.uploading[field]}
+          className={`px-3 py-2 rounded-lg text-[8px] font-bold uppercase tracking-widest transition-all flex items-center gap-1.5 ${img.uploadOk[field] ? "bg-emerald-100 text-emerald-600" : "bg-slate-100 text-slate-600 hover:bg-slate-200"}`}>
+          {img.uploading[field] ? <div className="w-3 h-3 border-2 border-current border-t-transparent rounded-full animate-spin" /> : img.uploadOk[field] ? <CheckCircle size={12} /> : <Upload size={12} />}
+          {img.uploading[field] ? "Upload..." : img.uploadOk[field] ? "Berhasil" : "Upload"}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function GalleryEditor({ items, onAdd, onRemove, onChange, img }: {
+  items: any[]; onAdd: (t: any) => void; onRemove: (i: number) => void;
+  onChange: (i: number, f: string, v: string) => void; img: any;
+}) {
+  const addNew = () => {
+    const input = document.createElement("input");
+    input.type = "file";
+    input.accept = "image/*";
+    input.onchange = async () => {
+      const file = input.files?.[0];
+      if (!file) return;
+      const fd = new FormData();
+      fd.append("file", file);
+      try {
+        const r = await fetch("/api/vendor/upload", { method: "POST", headers: { Authorization: "Bearer " + localStorage.getItem("vps_token") }, body: fd });
+        const d = await r.json();
+        if (d.url) onAdd({ image: d.url, caption: "", type: "Kegiatan" });
+      } catch { alert("Upload gagal"); }
+    };
+    input.click();
+  };
+
+  return (
+    <div className="bg-white p-5 rounded-xl border border-slate-200 space-y-4">
+      <div className="flex items-center justify-between">
+        <h3 className="text-[10px] font-black text-slate-900 uppercase tracking-widest">Galeri ({items.length})</h3>
+        <button onClick={addNew} className="px-3 py-1.5 bg-blue-600 text-white rounded-lg text-[8px] font-bold uppercase tracking-widest hover:bg-blue-700 flex items-center gap-1"><Upload size={10} /> Upload</button>
+      </div>
+      {items.length === 0 && <p className="text-[10px] text-slate-400 text-center py-4">Belum ada foto. Klik Upload untuk menambah.</p>}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+        {items.map((item: any, i: number) => (
+          <div key={i} className="p-3 bg-slate-50 rounded-lg border border-slate-100 relative">
+            <button onClick={() => onRemove(i)} className="absolute top-2 right-2 z-10 p-1.5 bg-white/80 rounded-full text-slate-400 hover:text-red-500 transition-colors shadow-sm"><Trash2 size={12} /></button>
+            <div className="flex gap-3">
+              <div className="w-24 h-16 rounded-lg overflow-hidden bg-slate-200 shrink-0">
+                {item.image ? <img src={item.image} alt="" className="w-full h-full object-cover" onError={e => { (e.target as HTMLImageElement).style.display = "none"; }} /> : <div className="w-full h-full flex items-center justify-center text-slate-400"><Image size={20} /></div>}
+              </div>
+              <div className="flex-1 min-w-0 space-y-2">
+                <input value={item.caption || ""} onChange={e => onChange(i, "caption", e.target.value)} placeholder="Keterangan"
+                  className="w-full bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 text-[10px] outline-none" />
+                <input value={item.type || ""} onChange={e => onChange(i, "type", e.target.value)} placeholder="Tipe"
+                  className="w-full bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 text-[10px] outline-none" />
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function PromoEditor({ items, onAdd, onRemove, onChange, img }: {
+  items: any[]; onAdd: (t: any) => void; onRemove: (i: number) => void;
+  onChange: (i: number, f: string, v: string) => void; img: any;
+}) {
+  const addNew = () => {
+    onAdd({ type: "Promo", title: "", description: "", image: "" });
+  };
+
+  return (
+    <div className="bg-white p-5 rounded-xl border border-slate-200 space-y-4">
+      <div className="flex items-center justify-between">
+        <h3 className="text-[10px] font-black text-slate-900 uppercase tracking-widest">Promo & Berita ({items.length})</h3>
+        <button onClick={addNew} className="px-3 py-1.5 bg-blue-600 text-white rounded-lg text-[8px] font-bold uppercase tracking-widest hover:bg-blue-700 flex items-center gap-1"><Plus size={10} /> Tambah</button>
+      </div>
+      {items.length === 0 && <p className="text-[10px] text-slate-400 text-center py-4">Belum ada data. Klik Tambah untuk mulai.</p>}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+        {items.map((item: any, i: number) => (
+          <div key={i} className="p-3 bg-slate-50 rounded-lg border border-slate-100 relative">
+            <button onClick={() => onRemove(i)} className="absolute top-2 right-2 z-10 p-1.5 bg-white/80 rounded-full text-slate-400 hover:text-red-500 transition-colors shadow-sm"><Trash2 size={12} /></button>
+            <div className="space-y-2">
+              <div className="grid grid-cols-2 gap-2">
+                <input value={item.type || ""} onChange={e => onChange(i, "type", e.target.value)} placeholder="Tipe"
+                  className="w-full bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 text-[10px] outline-none" />
+                <div className="flex items-center gap-2">
+                  {item.image && <ImagePreview src={item.image} onRemove={() => onChange(i, "image", "")} />}
+                  <button onClick={() => img.doUpload(`promotions.${i}.image`, (url: string) => onChange(i, "image", url))} disabled={img.uploading[`promotions.${i}.image`]}
+                    className={`px-2 py-1.5 rounded-lg text-[8px] font-bold uppercase tracking-widest transition-all flex items-center gap-1 ${img.uploadOk[`promotions.${i}.image`] ? "bg-emerald-100 text-emerald-600" : "bg-slate-100 text-slate-600 hover:bg-slate-200"}`}>
+                    {img.uploading[`promotions.${i}.image`] ? <div className="w-2.5 h-2.5 border-2 border-current border-t-transparent rounded-full animate-spin" /> : <Upload size={10} />}
+                    {img.uploadOk[`promotions.${i}.image`] ? "OK" : "Gambar"}
+                  </button>
+                </div>
+              </div>
+              <input value={item.title || ""} onChange={e => onChange(i, "title", e.target.value)} placeholder="Judul"
+                className="w-full bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 text-[10px] outline-none" />
+              <textarea value={item.description || ""} onChange={e => onChange(i, "description", e.target.value)} placeholder="Deskripsi"
+                className="w-full bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 text-[10px] outline-none min-h-[40px]" rows={2} />
+            </div>
+          </div>
+        ))}
       </div>
     </div>
   );
