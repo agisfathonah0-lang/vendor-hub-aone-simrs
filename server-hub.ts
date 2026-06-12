@@ -39,6 +39,9 @@ const FRONTEND_DIR = isDist
 
 const app = express();
 
+// Trust proxy (Render, Cloudflare, etc.)
+app.set('trust proxy', 1);
+
 // Security & parsing
 app.use(helmet({ contentSecurityPolicy: false }));
 app.use(cors({
