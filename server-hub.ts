@@ -12,6 +12,7 @@ import "dotenv/config";
 import express from "express";
 import cors from "cors";
 import helmet from "helmet";
+import rateLimit from "express-rate-limit";
 import http from "http";
 import https from "https";
 import { readFileSync, existsSync, mkdirSync } from "fs";
@@ -25,7 +26,11 @@ import syncRoutes from "./src/routes/sync.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PORT = parseInt(process.env.PORT || "4000");
-const CORS_ORIGIN = process.env.CORS_ORIGIN || "*";
+const DEV_ORIGIN = process.env.DEV_ORIGIN || "http://localhost:5173";
+const PROD_ORIGIN = process.env.PROD_ORIGIN || "https://hub.aone-trust.com";
+const CORS_ORIGINS = process.env.CORS_ORIGINS
+  ? process.env.CORS_ORIGINS.split(",").map(s => s.trim())
+  : [DEV_ORIGIN, PROD_ORIGIN];
 
 const isDist = path.basename(__dirname) === 'dist';
 const FRONTEND_DIR = isDist
@@ -36,9 +41,20 @@ const app = express();
 
 // Security & parsing
 app.use(helmet({ contentSecurityPolicy: false }));
-app.use(cors({ origin: CORS_ORIGIN }));
-app.use(express.json({ limit: "10mb" }));
-app.use(express.urlencoded({ extended: true }));
+app.use(cors({
+  origin: (origin, cb) => {
+    if (!origin || CORS_ORIGINS.includes("*") || CORS_ORIGINS.includes(origin)) return cb(null, true);
+    cb(null, false);
+  },
+}));
+app.use(express.json({ limit: "5mb" }));
+app.use(express.urlencoded({ extended: true, limit: "5mb" }));
+
+// Rate limiting
+const limiter = rateLimit({ windowMs: 60000, max: 100, standardHeaders: true, legacyHeaders: false, message: { error: "Terlalu banyak permintaan, coba lagi nanti." } });
+app.use("/api", limiter);
+const loginLimiter = rateLimit({ windowMs: 60000, max: 10, standardHeaders: true, legacyHeaders: false, message: { error: "Terlalu banyak percobaan login. Coba lagi dalam 1 menit." } });
+app.use("/api/vendor/auth/login", loginLimiter);
 
 // Request logging
 app.use((req, _res, next) => {
@@ -115,7 +131,7 @@ app.use(async (req, res, next) => {
   } catch (err: any) {
     const wantsHtml = (req.headers.accept || '').includes('text/html');
     if (wantsHtml) {
-      res.status(502).send(`<html><body style="font-family:sans-serif;display:flex;align-items:center;justify-content:center;height:100vh"><div style="text-align:center"><h1>🔴 RS Sedang Offline</h1><p>${entry.name} tidak terhubung. Coba lagi nanti.</p></div></body></html>`);
+      res.status(502).send(`<html><body style="font-family:sans-serif;display:flex;align-items:center;justify-content:center;height:100vh"><div style="text-align:center"><h1>🔴 RS Sedang Offline</h1><p>${entry.name.replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c] || c)} tidak terhubung. Coba lagi nanti.</p></div></body></html>`);
     } else {
       res.status(502).json({ error: `RS offline: ${err.message}` });
     }
@@ -176,7 +192,10 @@ app.all("/api/proxy/:rsId/*", async (req, res) => {
 // 404 for unmatched API routes (don't fall through to SPA)
 app.use("/api", (_req, res) => res.status(404).json({ error: "API endpoint tidak ditemukan" }));
 
-// Serve frontend SPA build
+// Serve uploads & frontend SPA build
+const UPLOAD_DIR = path.join(__dirname, "uploads");
+if (!existsSync(UPLOAD_DIR)) mkdirSync(UPLOAD_DIR, { recursive: true });
+app.use("/uploads", express.static(UPLOAD_DIR));
 app.use(express.static(FRONTEND_DIR));
 app.get("*", (_req, res) => {
   const indexHtml = path.join(FRONTEND_DIR, "index.html");
@@ -213,7 +232,8 @@ async function start() {
     const crypto = (await import("crypto")).default;
     const id = "SA-" + crypto.randomUUID().slice(0, 8).toUpperCase();
     const email = process.env.ADMIN_EMAIL || "superadmin@aone-trust.com";
-    const password = process.env.ADMIN_PASSWORD || "Admin123!";
+    const password = process.env.ADMIN_PASSWORD;
+    if (!password) throw new Error("ADMIN_PASSWORD environment variable is required!");
     const hash = crypto.scryptSync(password, id.slice(0, 16), 64).toString("hex");
     await query(
       "INSERT INTO users (user_id, email, display_name, role, password_hash) VALUES ($1,$2,$3,$4,$5)",
@@ -224,6 +244,12 @@ async function start() {
 
   // Warm domain cache
   await refreshDomainCache();
+
+  // Global error handler
+  app.use((err: any, _req: any, res: any, _next: any) => {
+    console.error(`[ERROR] ${err.message || err}`);
+    res.status(err.status || 500).json({ error: "Terjadi kesalahan internal server." });
+  });
 
   // HTTP or HTTPS
   let server: http.Server | https.Server;

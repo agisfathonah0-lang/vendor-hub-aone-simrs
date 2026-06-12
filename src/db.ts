@@ -202,11 +202,42 @@ export async function migrate() {
   CREATE INDEX IF NOT EXISTS idx_notifications_user ON notifications(user_id);
   CREATE INDEX IF NOT EXISTS idx_rs_lab_results_rm ON rs_lab_results(institution_id, no_rm);
   CREATE INDEX IF NOT EXISTS idx_rs_doctor_schedules_inst ON rs_doctor_schedules(institution_id);
+  -- Vendor landing page config (single row)
+  CREATE TABLE IF NOT EXISTS vendor_landing_config (
+    id INTEGER PRIMARY KEY DEFAULT 1,
+    data JSONB NOT NULL DEFAULT '{}'::jsonb,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT single_row CHECK (id = 1)
+  );
+  INSERT INTO vendor_landing_config (id, data) VALUES (1, '{}'::jsonb) ON CONFLICT (id) DO NOTHING;
+
   -- Add institution_id to tables that were missing it
   ALTER TABLE audit_logs ADD COLUMN IF NOT EXISTS institution_id VARCHAR(128) REFERENCES institutions(id);
   ALTER TABLE mobile_devices ADD COLUMN IF NOT EXISTS institution_id VARCHAR(128) REFERENCES institutions(id);
   ALTER TABLE notifications ADD COLUMN IF NOT EXISTS institution_id VARCHAR(128) REFERENCES institutions(id);
   `;
   await query(sql);
+
+  // Patch old public configs with new section defaults + demo data
+  const patched = await query(`
+    UPDATE rs_public_config
+    SET data = data::jsonb ||
+      '{"gallery":[],"polyclinics":[],"organizationStructure":[],"promotions":[],"services":[],"operationalHours":[],"profile":{}}'::jsonb
+    WHERE NOT (data::jsonb ? 'gallery')
+    RETURNING institution_id
+  `);
+  if (patched.rowCount > 0) {
+    const demoJson = JSON.stringify({
+      heroImage: "", name: "RSUD Demo Hospital", tagline: "Melayani dengan Hati, Menuju Sehat Bersama", branding: { logo: "", primaryColor: "#1e40af" },
+      profile: { description: "RSUD Demo Hospital adalah rumah sakit umum daerah yang berkomitmen memberikan pelayanan kesehatan berkualitas tinggi.", vision: "Menjadi rumah sakit terpercaya dan unggul secara nasional pada tahun 2030.", mission: "Memberikan pelayanan kesehatan yang aman, bermutu, dan terjangkau." },
+      services: [{ name: "IGD 24 Jam", description: "Pelayanan gawat darurat nonstop" }, { name: "Rawat Inap", description: "Fasilitas rawat inap nyaman" }, { name: "Laboratorium", description: "Pemeriksaan lab lengkap" }, { name: "Radiologi", description: "Rontgen, CT Scan, MRI" }, { name: "Farmasi", description: "Apotek 24 jam" }, { name: "MCU", description: "Medical check up" }],
+      operationalHours: [{ day: "Senin - Jumat", buka: "08:00", tutup: "20:00" }, { day: "Sabtu", buka: "08:00", tutup: "16:00" }, { day: "Minggu & Libur", buka: "IGD 24 Jam", tutup: "IGD 24 Jam" }],
+      polyclinics: [{ name: "Poli Umum", description: "Pelayanan kesehatan dasar", specialists: ["dr. Andi Pratama, Sp.PD", "dr. Siti Rahma, Sp.PD"] }, { name: "Poli Anak", description: "Kesehatan anak", specialists: ["dr. Maya Dewi, Sp.A"] }, { name: "Poli Gigi", description: "Kesehatan gigi", specialists: ["drg. Ahmad Fauzi"] }, { name: "Poli Mata", description: "Kesehatan mata", specialists: ["dr. Indra Wijaya, Sp.M"] }],
+      gallery: [{ image: "", caption: "Peresmian Gedung Baru IGD", type: "Kegiatan" }, { image: "", caption: "Penghargaan RS Terbaik", type: "Prestasi" }, { image: "", caption: "Bakti Sosial Kesehatan", type: "Kegiatan" }],
+      promotions: [{ type: "Promo", title: "MCU Paket Hemat", description: "Medical check up lengkap hanya Rp 500.000", image: "" }, { type: "Berita", title: "Vaksinasi COVID-19", description: "Pendaftaran vaksinasi dibuka setiap hari", image: "" }],
+    });
+    await query("UPDATE rs_public_config SET data = $1::jsonb WHERE institution_id = $2", [demoJson, patched.rows[0].institution_id]);
+  }
+  console.log("[DB] Public config sections patched");
   console.log("[DB] Hub schema migrated successfully");
 }

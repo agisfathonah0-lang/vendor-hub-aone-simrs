@@ -5,12 +5,13 @@ import {
   Server, DollarSign, Clock, CheckCircle2,   Edit3, Lock, Unlock, UserPlus, Zap,
   RefreshCw, MapPin, Globe, Filter, AlertTriangle, BarChart3, MessageSquare,
   Wifi, WifiOff, Sliders, Copy, MoreVertical, Play, Pause, Ban, Calendar,
-  ToggleLeft, ToggleRight, Link, Hash, Layers, ExternalLink
+  ToggleLeft, ToggleRight, Link, Hash, Layers, ExternalLink, Menu
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { apiFetch, cn, formatDate, formatCurrency, getInitials } from "../lib/utils";
+import LandingTab from "./LandingTab";
 
-type TabId = "overview" | "institutions" | "users" | "licenses" | "monitoring" | "modules" | "support";
+type TabId = "overview" | "institutions" | "users" | "licenses" | "monitoring" | "modules" | "landing" | "support";
 
 const TABS: { id: TabId; label: string; icon: React.ElementType }[] = [
   { id: "overview", label: "Beranda", icon: LayoutDashboard },
@@ -19,26 +20,28 @@ const TABS: { id: TabId; label: string; icon: React.ElementType }[] = [
   { id: "licenses", label: "Lisensi", icon: CreditCard },
   { id: "monitoring", label: "Monitoring", icon: Activity },
   { id: "modules", label: "Modul", icon: Puzzle },
+  { id: "landing", label: "Landing", icon: Globe },
   { id: "support", label: "Bantuan", icon: LifeBuoy },
 ];
 
 export default function SuperAdminDashboard() {
   const [activeTab, setActiveTab] = useState<TabId>("overview");
+  const [sidebarOpen, setSidebarOpen] = useState(false);
 
   return (
     <div className="flex h-screen bg-slate-50 font-sans overflow-hidden">
-      <aside className="w-56 bg-slate-900 flex flex-col shrink-0">
-        <div className="p-4 border-b border-slate-700 bg-slate-800">
+      <aside className={`fixed md:relative z-40 inset-y-0 left-0 w-56 bg-slate-900 flex flex-col shrink-0 transition-transform duration-200 ${sidebarOpen ? "translate-x-0" : "-translate-x-full"} md:translate-x-0`}>
+        <div className="p-4 border-b border-slate-700 bg-slate-800 flex items-center justify-between">
           <h1 className="text-white font-bold text-sm tracking-tight uppercase flex items-center gap-2">
             <ShieldCheck size={16} className="text-blue-400" /> VENDOR <span className="text-blue-400">HUB</span>
           </h1>
-          <p className="text-slate-500 text-[8px] uppercase font-bold tracking-widest mt-1">Super Admin Control Panel</p>
+          <button onClick={() => setSidebarOpen(false)} className="md:hidden p-1 text-slate-400 hover:text-white"><X size={16} /></button>
         </div>
         <nav className="flex-1 py-2 overflow-y-auto custom-scrollbar">
           {TABS.map(tab => {
             const Icon = tab.icon;
             return (
-              <button key={tab.id} onClick={() => setActiveTab(tab.id)} className={cn(
+              <button key={tab.id} onClick={() => { setActiveTab(tab.id); setSidebarOpen(false); }} className={cn(
                 "w-full flex items-center gap-3 px-4 py-2.5 text-[10px] font-bold uppercase tracking-wider transition-all text-left",
                 activeTab === tab.id ? "bg-blue-600 text-white" : "text-slate-400 hover:bg-slate-800 hover:text-white"
               )}>
@@ -49,8 +52,12 @@ export default function SuperAdminDashboard() {
         </nav>
         <div className="p-3 border-t border-slate-800 text-[8px] text-slate-600 font-mono text-center">v3.0.0</div>
       </aside>
-      <main className="flex-1 overflow-y-auto p-6">
+      {sidebarOpen && <div onClick={() => setSidebarOpen(false)} className="fixed inset-0 bg-black/30 z-30 md:hidden" />}
+      <main className="flex-1 overflow-y-auto p-4 md:p-6">
         <div className="max-w-7xl mx-auto">
+          <div className="flex items-center gap-3 mb-4 md:hidden">
+            <button onClick={() => setSidebarOpen(true)} className="p-2 text-slate-400 hover:text-slate-600 rounded-lg"><Menu size={18} /></button>
+          </div>
           <AnimatePresence mode="wait">
             <motion.div key={activeTab} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.15 }}>
               {activeTab === "overview" && <OverviewTab />}
@@ -59,6 +66,7 @@ export default function SuperAdminDashboard() {
               {activeTab === "licenses" && <LicensesTab />}
               {activeTab === "monitoring" && <MonitoringTab />}
               {activeTab === "modules" && <ModulesTab />}
+              {activeTab === "landing" && <LandingTab />}
               {activeTab === "support" && <SupportTab />}
             </motion.div>
           </AnimatePresence>
@@ -72,13 +80,17 @@ export default function SuperAdminDashboard() {
 function OverviewTab() {
   const [stats, setStats] = useState({ totalInstitutions: 0, totalUsers: 0, activeLicenses: 0, onlineRs: 0 });
   const [institutions, setInstitutions] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
 
   const fetchData = useCallback(async () => {
     try { setStats(await apiFetch("/api/vendor/dashboard")); } catch {}
     try { setInstitutions(await apiFetch("/api/vendor/institutions")); } catch {}
+    setLoading(false);
   }, []);
 
   useEffect(() => { fetchData(); const iv = setInterval(fetchData, 15000); return () => clearInterval(iv); }, [fetchData]);
+
+  if (loading) return <div className="flex items-center justify-center py-20"><div className="w-8 h-8 border-4 border-blue-600/20 border-t-blue-600 rounded-full animate-spin" /></div>;
 
   const cards = [
     { label: "Institusi Terdaftar", value: stats.totalInstitutions, icon: Building2, color: "text-blue-600", bg: "bg-blue-50" },
@@ -152,11 +164,15 @@ function InstitutionsTab() {
   const [editInst, setEditInst] = useState<any>(null);
   const [detailInst, setDetailInst] = useState<any>(null);
   const [form, setForm] = useState({ name: "", type: "hospital", address: "", phone: "", email: "", contactPerson: "", city: "", province: "" });
+  const [loading, setLoading] = useState(true);
 
   const fetchList = useCallback(async () => {
     try { setInstitutions(await apiFetch("/api/vendor/institutions")); } catch {}
+    setLoading(false);
   }, []);
   useEffect(() => { fetchList(); }, [fetchList]);
+
+  if (loading) return <div className="flex items-center justify-center py-20"><div className="w-8 h-8 border-4 border-blue-600/20 border-t-blue-600 rounded-full animate-spin" /></div>;
 
   const filtered = institutions.filter((i: any) => i.name?.toLowerCase().includes(search.toLowerCase()) || i.city?.toLowerCase().includes(search.toLowerCase()));
 
@@ -237,25 +253,21 @@ function InstitutionDetail({ inst, onBack }: { inst: any; onBack: () => void }) 
   const [rsConfig, setRsConfig] = useState<any>(null);
   const [showToken, setShowToken] = useState(false);
   const [copied, setCopied] = useState("");
+  const [loadingDetail, setLoadingDetail] = useState(true);
 
   const fetchDetail = useCallback(async () => {
-    try { setUsers(await apiFetch(`/api/vendor/users?institutionId=${inst.id}`)); } catch {}
-    try {
-      const m = await apiFetch(`/api/vendor/institutions/${inst.id}/modules`);
-      setModData(m);
-      setLocalModules(m.enabled || []);
-    } catch {}
-    try {
-      const d = await apiFetch(`/api/vendor/institutions/${inst.id}`);
-      setSlug(d.url_slug || "");
-      setDomain(d.domain || "");
-    } catch {}
-    try {
-      setRsConfig(await apiFetch(`/api/vendor/institutions/${inst.id}/config`));
-    } catch {}
+    await Promise.all([
+      apiFetch(`/api/vendor/users?institutionId=${inst.id}`).then(setUsers).catch(() => {}),
+      apiFetch(`/api/vendor/institutions/${inst.id}/modules`).then(m => { setModData(m); setLocalModules(m.enabled || []); }).catch(() => {}),
+      apiFetch(`/api/vendor/institutions/${inst.id}`).then(d => { setSlug(d.url_slug || ""); setDomain(d.domain || ""); }).catch(() => {}),
+      apiFetch(`/api/vendor/institutions/${inst.id}/config`).then(setRsConfig).catch(() => {}),
+    ]);
+    setLoadingDetail(false);
   }, [inst.id]);
 
   useEffect(() => { fetchDetail(); }, [fetchDetail]);
+
+  if (loadingDetail) return <div className="flex items-center justify-center py-20"><div className="w-8 h-8 border-4 border-blue-600/20 border-t-blue-600 rounded-full animate-spin" /></div>;
 
   const toggleModule = (key: string) => {
     setLocalModules(prev => prev.includes(key) ? prev.filter(k => k !== key) : [...prev, key]);
@@ -641,12 +653,16 @@ function UsersTab() {
   const [newUser, setNewUser] = useState({ email: "", password: "", displayName: "", role: "front_office" });
   const [creating, setCreating] = useState(false);
   const [editingUser, setEditingUser] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
 
   const fetchData = useCallback(async () => {
     try { setUsers(await apiFetch("/api/vendor/users")); } catch {}
     try { setInstitutions(await apiFetch("/api/vendor/institutions")); } catch {}
+    setLoading(false);
   }, []);
   useEffect(() => { fetchData(); }, [fetchData]);
+
+  if (loading) return <div className="flex items-center justify-center py-20"><div className="w-8 h-8 border-4 border-blue-600/20 border-t-blue-600 rounded-full animate-spin" /></div>;
 
   const filtered = users.filter((u: any) => {
     const ms = u.display_name?.toLowerCase().includes(search.toLowerCase()) || u.email?.toLowerCase().includes(search.toLowerCase());
@@ -737,12 +753,16 @@ function LicensesTab() {
   const [institutions, setInstitutions] = useState<any[]>([]);
   const [showModal, setShowModal] = useState(false);
   const [form, setForm] = useState({ institutionId: "", plan: "starter", status: "trial", maxUsers: 15, autoRenew: true });
+  const [loading, setLoading] = useState(true);
 
   const fetchData = useCallback(async () => {
     try { setLicenses(await apiFetch("/api/vendor/licenses")); } catch {}
     try { setInstitutions(await apiFetch("/api/vendor/institutions")); } catch {}
+    setLoading(false);
   }, []);
   useEffect(() => { fetchData(); }, [fetchData]);
+
+  if (loading) return <div className="flex items-center justify-center py-20"><div className="w-8 h-8 border-4 border-blue-600/20 border-t-blue-600 rounded-full animate-spin" /></div>;
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -815,8 +835,11 @@ function LicensesTab() {
 /* ==================== MONITORING ==================== */
 function MonitoringTab() {
   const [onlineRs, setOnlineRs] = useState<any[]>([]);
-  const fetchOnline = useCallback(async () => { try { setOnlineRs(await apiFetch("/api/vendor/online-rs")); } catch {} }, []);
+  const [loading, setLoading] = useState(true);
+  const fetchOnline = useCallback(async () => { try { setOnlineRs(await apiFetch("/api/vendor/online-rs")); } catch {}; setLoading(false); }, []);
   useEffect(() => { fetchOnline(); const iv = setInterval(fetchOnline, 10000); return () => clearInterval(iv); }, [fetchOnline]);
+
+  if (loading) return <div className="flex items-center justify-center py-20"><div className="w-8 h-8 border-4 border-blue-600/20 border-t-blue-600 rounded-full animate-spin" /></div>;
 
   return (
     <div className="space-y-4">
@@ -872,12 +895,16 @@ const ALL_MODULES = [
 function ModulesTab() {
   const [templates, setTemplates] = useState<Record<string, { key: string; label: string }[]>>({});
   const [selectedType, setSelectedType] = useState("hospital");
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     (async () => {
       try { setTemplates(await apiFetch("/api/vendor/module-templates")); } catch {}
+      setLoading(false);
     })();
   }, []);
+
+  if (loading) return <div className="flex items-center justify-center py-20"><div className="w-8 h-8 border-4 border-blue-600/20 border-t-blue-600 rounded-full animate-spin" /></div>;
 
   const currentModules = templates[selectedType] || [];
 

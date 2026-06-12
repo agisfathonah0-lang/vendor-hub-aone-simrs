@@ -322,7 +322,7 @@ router.post("/institutions", requireSuperAdmin, async (req, res) => {
     // 3) Auto-create admin_rs user
     const adminRsId = "USR-" + crypto.randomUUID().slice(0, 8).toUpperCase();
     const rsEmail = adminEmail || `admin@${slug}.aone-trust.com`;
-    const rsPassword = adminPassword || "Admin123!";
+    const rsPassword = adminPassword || crypto.randomUUID().slice(0, 12) + "Aa1!";
     const hash = crypto.scryptSync(rsPassword, adminRsId.slice(0, 16), 64).toString("hex");
     await query(
       `INSERT INTO users (user_id, email, display_name, role, password_hash, institution_id, status)
@@ -751,6 +751,50 @@ router.patch("/my/institution/config", requireAdmin, async (req: any, res) => {
     );
     res.json({ success: true });
   } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+// Upload image (admin only)
+import multer from "multer";
+import path from "path";
+import { fileURLToPath } from "url";
+import crypto from "crypto";
+const _ud = path.dirname(fileURLToPath(import.meta.url));
+const upload = multer({
+  dest: path.join(_ud, "../../uploads"),
+  limits: { fileSize: 5 * 1024 * 1024 },
+  fileFilter: (_req, file, cb) => {
+    if (!file.mimetype.startsWith("image/")) return cb(new Error("Only images allowed"));
+    cb(null, true);
+  },
+});
+router.post("/upload", requireAdmin, upload.single("file"), (req: any, res) => {
+  if (!req.file) return res.status(400).json({ error: "No file uploaded" });
+  const ext = path.extname(req.file.originalname) || ".jpg";
+  const newName = crypto.randomUUID() + ext;
+  const fs = require("fs");
+  fs.renameSync(req.file.path, path.join(req.file.destination, newName));
+  res.json({ url: `/uploads/${newName}` });
+});
+
+// Landing page config — public GET, super admin PUT
+router.get("/landing-config", async (_req, res) => {
+  try {
+    const result = await query("SELECT data FROM vendor_landing_config WHERE id = 1");
+    res.json(result.rows[0]?.data || {});
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.put("/landing-config", requireSuperAdmin, async (req, res) => {
+  try {
+    const { data } = req.body;
+    if (!data) return res.status(400).json({ error: "Data diperlukan" });
+    await query("UPDATE vendor_landing_config SET data = $1::jsonb, updated_at = CURRENT_TIMESTAMP WHERE id = 1", [JSON.stringify(data)]);
+    res.json({ success: true });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 export default router;

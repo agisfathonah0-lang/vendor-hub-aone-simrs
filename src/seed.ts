@@ -47,6 +47,7 @@ async function seed() {
   );
 
   const demoConfig = {
+    heroImage: "",
     name: "RSUD Demo Hospital",
     tagline: "Melayani dengan Hati, Menuju Sehat Bersama",
     branding: { logo: "", primaryColor: "#1e40af" },

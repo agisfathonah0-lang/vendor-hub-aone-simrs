@@ -97,4 +97,18 @@ router.get("/:slug/queue", async (req, res) => {
   } catch (err: any) { res.status(500).json({ error: err.message }); }
 });
 
+router.get("/:slug/meta", async (req, res) => {
+  try {
+    const { slug } = req.params;
+    const inst = await query(
+      `SELECT i.name, i.city, i.type, c.data->>'tagline' as tagline, c.data->'profile'->>'description' as description
+       FROM institutions i LEFT JOIN rs_public_config c ON i.id = c.institution_id
+       WHERE i.url_slug = $1`,
+      [slug]
+    );
+    if (!inst.rowCount) return res.status(404).json({ error: "RS tidak ditemukan." });
+    res.json(inst.rows[0]);
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
 export default router;

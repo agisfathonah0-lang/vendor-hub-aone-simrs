@@ -1,6 +1,7 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useParams, Link } from "react-router-dom";
 import { Search, FileText, ChevronLeft, Microscope, Calendar, AlertCircle } from "lucide-react";
+import { useSEO } from "../lib/useSEO";
 
 export default function PublicLabResult() {
   const { slug } = useParams();
@@ -8,6 +9,14 @@ export default function PublicLabResult() {
   const [results, setResults] = useState<any[] | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [meta, setMeta] = useState<any>(null);
+
+  useEffect(() => {
+    if (!slug) return;
+    fetch(`/api/public/${slug}/meta`).then(r => r.json()).then(d => setMeta(d)).catch(() => {});
+  }, [slug]);
+
+  useSEO(meta ? `Hasil Laboratorium — ${meta.name}` : "Hasil Laboratorium", `Cek hasil pemeriksaan laboratorium online di ${meta?.name || slug}`);
 
   const search = async () => {
     if (!noRm.trim()) return;

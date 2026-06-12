@@ -1,6 +1,7 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useParams, Link } from "react-router-dom";
 import { Calendar, Clock, ChevronLeft, User, Stethoscope, Send, CheckCircle, AlertCircle } from "lucide-react";
+import { useSEO } from "../lib/useSEO";
 
 const DEPARTMENTS = ["Poli Umum", "Poli Gigi", "Poli Anak", "Poli Kandungan", "Poli Mata", "Poli THT", "Poli Saraf", "Poli Jantung", "Poli Kulit", "IGD"];
 
@@ -9,6 +10,14 @@ export default function OnlineQueue() {
   const [form, setForm] = useState({ name: "", nik: "", phone: "", department: "", complaint: "" });
   const [submitting, setSubmitting] = useState(false);
   const [result, setResult] = useState<{ success?: boolean; queueNumber?: string; error?: string }>({});
+  const [meta, setMeta] = useState<any>(null);
+
+  useEffect(() => {
+    if (!slug) return;
+    fetch(`/api/public/${slug}/meta`).then(r => r.json()).then(d => setMeta(d)).catch(() => {});
+  }, [slug]);
+
+  useSEO(meta ? `Antrian Online — ${meta.name}` : "Antrian Online", `Ambil nomor antrian online di ${meta?.name || slug} — daftar antrian tanpa datang langsung.`);
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();

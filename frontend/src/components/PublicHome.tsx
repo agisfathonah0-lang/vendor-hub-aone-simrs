@@ -5,6 +5,7 @@ import {
   Stethoscope, Microscope, Heart, ExternalLink, ChevronDown, ChevronRight,
   Award, Image, Users, ChevronLeft, ChevronRight as ChevronRightIcon
 } from "lucide-react";
+import { useSEO } from "../lib/useSEO";
 
 const SERVICE_ICONS = [Stethoscope, Activity, Microscope, Heart, Shield, Calendar];
 
@@ -23,6 +24,13 @@ export default function PublicHome() {
       .finally(() => setLoading(false));
   }, [slug]);
 
+  const instName = data?.institution?.name;
+  const instCity = data?.institution?.city;
+  const tagline = data?.config?.tagline;
+  const profileDesc = data?.config?.profile?.description;
+
+  useSEO(instName, tagline || profileDesc || `${instName || "RS"} — ${instCity || "Indonesia"}`);
+
   if (loading) return <div className="min-h-screen flex items-center justify-center bg-slate-50"><div className="w-8 h-8 border-4 border-blue-600/20 border-t-blue-600 rounded-full animate-spin" /></div>;
   if (!data) return <div className="min-h-screen flex items-center justify-center bg-slate-50"><p className="text-slate-400 text-sm">RS tidak ditemukan</p></div>;
 
@@ -39,18 +47,23 @@ export default function PublicHome() {
   return (
     <div className="min-h-screen bg-white">
       {/* HERO */}
-      <section className="relative bg-gradient-to-br from-slate-900 via-slate-800 to-blue-900 text-white overflow-hidden">
-        <div className="absolute inset-0 opacity-5" style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23ffffff' fill-opacity='0.4'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")` }} />
-        <div className="max-w-6xl mx-auto px-6 py-20 relative">
-          <div className="flex items-center gap-4 mb-8">
+      <section className="relative text-white overflow-hidden min-h-[400px] flex items-center">
+        {config?.heroImage ? (
+          <img src={config.heroImage} alt="" className="absolute inset-0 w-full h-full object-cover" />
+        ) : (
+          <div className="absolute inset-0 bg-gradient-to-br from-slate-900 via-slate-800 to-blue-900" />
+        )}
+        <div className="absolute inset-0 bg-slate-900/50" />
+        <div className="max-w-6xl mx-auto px-6 py-20 relative w-full">
+          <div className="flex items-center gap-4 mb-8 flex-wrap">
             {brand?.logo ? <img src={brand.logo} className="w-16 h-16 rounded-2xl" alt="" />
-              : <div className="w-16 h-16 rounded-2xl bg-blue-600 flex items-center justify-center"><Building2 size={32} /></div>}
-            <div>
-              <h1 className="text-4xl font-black tracking-tight">{config?.name || inst.name}</h1>
-              <p className="text-blue-200/60 mt-1">{config?.tagline || profile?.description || `RS ${inst.type}`}</p>
+              : <div className="w-16 h-16 rounded-2xl bg-blue-600 flex items-center justify-center shrink-0"><Building2 size={32} /></div>}
+            <div className="min-w-0 flex-1">
+              <h1 className="text-2xl md:text-4xl font-black tracking-tight break-words">{config?.name || inst.name}</h1>
+              <p className="text-white/70 mt-1 text-sm">{config?.tagline || profile?.description || `RS ${inst.type}`}</p>
             </div>
           </div>
-          <div className="flex flex-wrap gap-4 text-sm text-blue-200/60">
+          <div className="flex flex-wrap gap-4 text-sm text-white/70">
             {inst.address && <span className="flex items-center gap-2"><MapPin size={14} /> {inst.address}, {inst.city}</span>}
             {inst.phone && <span className="flex items-center gap-2"><Phone size={14} /> {inst.phone}</span>}
           </div>
@@ -154,7 +167,7 @@ export default function PublicHome() {
         <section className="max-w-6xl mx-auto px-6 py-16">
           <h2 className="text-2xl font-black text-slate-900 tracking-tight mb-2">Layanan Kami</h2>
           <p className="text-slate-400 text-sm mb-8">Berbagai layanan kesehatan tersedia untuk Anda</p>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
             {services.map((s: any, i: number) => {
               const Icon = SERVICE_ICONS[i % SERVICE_ICONS.length];
               return (

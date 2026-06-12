@@ -38,7 +38,14 @@ export function initTunnelServer(server: http.Server | https.Server) {
             const token = msg.token;
             const expectedToken = process.env.TUNNEL_TOKEN;
 
-            if (expectedToken && token !== expectedToken) {
+            if (!expectedToken) {
+              console.error("[TUNNEL] TUNNEL_TOKEN not configured! Rejecting connection.");
+              ws.send(JSON.stringify({ type: "error", message: "Server configuration error" }));
+              ws.close();
+              return;
+            }
+
+            if (token !== expectedToken) {
               ws.send(JSON.stringify({ type: "error", message: "Invalid tunnel token" }));
               ws.close();
               return;

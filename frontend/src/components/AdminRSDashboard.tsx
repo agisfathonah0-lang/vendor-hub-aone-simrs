@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
 import {
   Globe, Save, LogOut, Plus, X, ChevronDown, ChevronRight,
-  Image, Users, Building2, Activity, AlertCircle, CheckCircle, ArrowLeft
+  Image, Users, Building2, Activity, AlertCircle, CheckCircle, ArrowLeft, Menu
 } from "lucide-react";
 import { apiFetch, cn } from "../lib/utils";
 
@@ -15,6 +15,7 @@ export default function AdminRSDashboard() {
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [tab, setTab] = useState<"profile" | "polyclinics" | "gallery" | "promotions" | "services" | "hours">("profile");
+  const [sidebarOpen, setSidebarOpen] = useState(false);
 
   useEffect(() => {
     const token = localStorage.getItem("vps_token");
@@ -112,20 +113,21 @@ export default function AdminRSDashboard() {
   return (
     <div className="min-h-screen bg-slate-50 flex">
       {/* Sidebar */}
-      <div className="w-56 bg-slate-900 text-white flex flex-col">
-        <div className="p-4 border-b border-slate-800">
+      <div className={`fixed md:relative z-40 inset-y-0 left-0 w-56 bg-slate-900 text-white flex flex-col transition-transform duration-200 ${sidebarOpen ? "translate-x-0" : "-translate-x-full"} md:translate-x-0`}>
+        <div className="p-4 border-b border-slate-800 flex items-center justify-between">
           <div className="flex items-center gap-2 mb-2">
             <div className="w-8 h-8 rounded-lg bg-blue-600 flex items-center justify-center"><Globe size={14} /></div>
             <div>
               <div className="font-black text-[10px] uppercase tracking-tight">Website RS</div>
-              <div className="text-[8px] text-slate-500 truncate w-40">{inst.name}</div>
+              <div className="text-[8px] text-slate-500 truncate w-40">{inst?.name}</div>
             </div>
           </div>
-          <Link to={`/rs/${slug}`} className="flex items-center gap-1 text-[8px] text-blue-400 hover:text-blue-300 transition-colors"><ArrowLeft size={10} /> Lihat Website</Link>
+          <button onClick={() => setSidebarOpen(false)} className="md:hidden p-1 text-slate-400 hover:text-white"><X size={16} /></button>
         </div>
+        <Link to={`/rs/${slug}`} className="flex items-center gap-1 text-[8px] text-blue-400 hover:text-blue-300 transition-colors px-4 pb-2"><ArrowLeft size={10} /> Lihat Website</Link>
         <nav className="flex-1 p-2 space-y-1">
           {TABS.map(t => (
-            <button key={t.id} onClick={() => setTab(t.id)}
+            <button key={t.id} onClick={() => { setTab(t.id); setSidebarOpen(false); }}
               className={cn("w-full flex items-center gap-2 px-3 py-2 rounded-lg text-[10px] font-bold uppercase tracking-widest transition-all",
                 tab === t.id ? "bg-blue-600 text-white" : "text-slate-400 hover:text-white hover:bg-slate-800")}>
               <t.icon size={12} /> {t.label}
@@ -133,21 +135,23 @@ export default function AdminRSDashboard() {
           ))}
         </nav>
         <div className="p-4 border-t border-slate-800">
-          <div className="text-[9px] text-slate-500 mb-2 truncate">{user.email}</div>
+          <div className="text-[9px] text-slate-500 mb-2 truncate">{user?.email}</div>
           <button onClick={logout} className="flex items-center gap-2 text-[9px] text-slate-400 hover:text-white uppercase tracking-widest font-bold"><LogOut size={10} /> Logout</button>
         </div>
       </div>
+      {sidebarOpen && <div onClick={() => setSidebarOpen(false)} className="fixed inset-0 bg-black/30 z-30 md:hidden" />}
 
       {/* Content */}
       <div className="flex-1 overflow-y-auto">
-        <div className="max-w-4xl mx-auto p-6">
-          <div className="flex items-center justify-between mb-6">
-            <div>
+        <div className="max-w-4xl mx-auto p-4 md:p-6">
+          <div className="flex items-center gap-3 md:gap-0 mb-6">
+            <button onClick={() => setSidebarOpen(true)} className="md:hidden p-2 text-slate-400 hover:text-slate-600 rounded-lg"><Menu size={18} /></button>
+            <div className="flex-1">
               <h1 className="font-black text-lg text-slate-900 uppercase tracking-tight">Kelola Website</h1>
-              <p className="text-[10px] text-slate-400">{inst.name}</p>
+              <p className="text-[10px] text-slate-400">{inst?.name}</p>
             </div>
             <button onClick={save} disabled={saving}
-              className={cn("px-4 py-2 rounded-xl text-[10px] font-bold uppercase tracking-widest flex items-center gap-2 transition-all",
+              className={cn("px-4 py-2 rounded-xl text-[10px] font-bold uppercase tracking-widest flex items-center gap-2 transition-all shrink-0",
                 saved ? "bg-emerald-500 text-white" : "bg-slate-900 text-white hover:bg-black")}>
               {saving ? <div className="w-3 h-3 border-2 border-white/20 border-t-white rounded-full animate-spin" /> : saved ? <CheckCircle size={12} /> : <Save size={12} />}
               {saved ? "Tersimpan" : "Simpan"}
@@ -206,6 +210,26 @@ export default function AdminRSDashboard() {
 }
 
 function ProfileEditor({ cfg, setNested }: { cfg: any; setNested: (path: string, val: any) => void }) {
+  const [uploading, setUploading] = useState(false);
+  const uploadFile = async (field: string) => {
+    const input = document.createElement("input");
+    input.type = "file";
+    input.accept = "image/*";
+    input.onchange = async () => {
+      const file = input.files?.[0];
+      if (!file) return;
+      setUploading(true);
+      const fd = new FormData();
+      fd.append("file", file);
+      try {
+        const r = await fetch("/api/vendor/upload", { method: "POST", headers: { Authorization: "Bearer " + localStorage.getItem("vps_token") }, body: fd });
+        const d = await r.json();
+        if (d.url) setNested(field, d.url);
+      } catch { alert("Upload gagal"); }
+      setUploading(false);
+    };
+    input.click();
+  };
   return (
     <div className="space-y-4">
       <div className="bg-white p-5 rounded-xl border border-slate-200 space-y-4">
@@ -213,6 +237,14 @@ function ProfileEditor({ cfg, setNested }: { cfg: any; setNested: (path: string,
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <Field label="Nama RS" value={cfg.name || ""} onChange={v => setNested("name", v)} />
           <Field label="Tagline" value={cfg.tagline || ""} onChange={v => setNested("tagline", v)} />
+          <div className="md:col-span-2">
+            <label className="text-[8px] font-bold text-slate-500 uppercase tracking-widest mb-1 block">Foto Banner</label>
+            <div className="flex items-center gap-2">
+              {cfg.heroImage && <img src={cfg.heroImage} className="w-16 h-10 rounded object-cover border" alt="" />}
+              <button onClick={() => uploadFile("heroImage")} disabled={uploading} className="px-3 py-2 bg-slate-100 text-slate-600 rounded-lg text-[8px] font-bold uppercase tracking-widest hover:bg-slate-200">{uploading ? "..." : "Pilih Foto"}</button>
+              {cfg.heroImage && <button onClick={() => setNested("heroImage", "")} className="px-3 py-2 text-red-400 text-[8px] font-bold uppercase tracking-widest hover:text-red-600">Hapus</button>}
+            </div>
+          </div>
         </div>
         <div>
           <label className="text-[8px] font-bold text-slate-500 uppercase tracking-widest mb-1 block">Deskripsi</label>

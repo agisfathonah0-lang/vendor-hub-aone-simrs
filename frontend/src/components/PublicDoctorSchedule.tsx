@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useParams, Link } from "react-router-dom";
 import { Calendar, Clock, ChevronLeft, User, Stethoscope, Filter } from "lucide-react";
+import { useSEO } from "../lib/useSEO";
 
 const DAYS = ["Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu", "Minggu"];
 const DAY_MAP: Record<string, string> = { "monday": "Senin", "tuesday": "Selasa", "wednesday": "Rabu", "thursday": "Kamis", "friday": "Jumat", "saturday": "Sabtu", "sunday": "Minggu" };
@@ -10,12 +11,16 @@ export default function PublicDoctorSchedule() {
   const [schedules, setSchedules] = useState<any[]>([]);
   const [filterDay, setFilterDay] = useState("");
   const [loading, setLoading] = useState(true);
+  const [meta, setMeta] = useState<any>(null);
 
   useEffect(() => {
     if (!slug) return;
+    fetch(`/api/public/${slug}/meta`).then(r => r.json()).then(d => setMeta(d)).catch(() => {});
     const url = filterDay ? `/api/public/${slug}/doctors?day=${filterDay}` : `/api/public/${slug}/doctors`;
     fetch(url).then(r => r.json()).then(d => { setSchedules(d); setLoading(false); }).catch(() => setLoading(false));
   }, [slug, filterDay]);
+
+  useSEO(meta ? `Jadwal Dokter — ${meta.name}` : "Jadwal Dokter", `Jadwal praktik dokter di ${meta?.name || slug}`);
 
   return (
     <div className="min-h-screen bg-slate-50">
