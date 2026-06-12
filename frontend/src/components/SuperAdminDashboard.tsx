@@ -388,6 +388,27 @@ function InstitutionDetail({ inst, onBack }: { inst: any; onBack: () => void }) 
             )}
           </div>
 
+          {/* Public URL */}
+          <div className="bg-white p-5 rounded-xl border border-slate-200 space-y-3">
+            <h3 className="text-[10px] font-black text-slate-900 uppercase tracking-widest">Website Publik</h3>
+            <p className="text-[8px] text-slate-400">Bagikan link ini ke pasien agar bisa akses profil RS, jadwal dokter, hasil lab, dan antrian online.</p>
+            {slug ? (
+              <div className="flex items-center gap-2">
+                <div className="flex-1 bg-blue-50 border border-blue-200 rounded-lg px-3 py-2 text-[10px] font-mono text-blue-700 flex items-center gap-1">
+                  <Globe size={10} />
+                  <span className="font-bold">{window.location.origin}/rs/{slug}</span>
+                </div>
+                <button onClick={() => { navigator.clipboard.writeText(`${window.location.origin}/rs/${slug}`); setCopied("url"); setTimeout(() => setCopied(""), 2000); }}
+                  className={cn("px-3 py-2 rounded-lg text-[8px] font-bold uppercase tracking-widest transition-all", copied === "url" ? "bg-emerald-500 text-white" : "bg-blue-100 text-blue-600 hover:bg-blue-200")}>
+                  {copied === "url" ? "✓" : <Copy size={10} />}
+                </button>
+                <a href={`/rs/${slug}`} target="_blank" className="px-3 py-2 bg-slate-900 text-white rounded-lg text-[8px] font-bold uppercase tracking-widest hover:bg-black transition-all"><ExternalLink size={10} /></a>
+              </div>
+            ) : (
+              <p className="text-[8px] text-amber-600">Atur slug terlebih dahulu agar link publik bisa diakses.</p>
+            )}
+          </div>
+
           {/* Domain */}
           <div className="bg-white p-5 rounded-xl border border-slate-200 space-y-4">
             <h3 className="text-[10px] font-black text-slate-900 uppercase tracking-widest">Domain Kustom</h3>
